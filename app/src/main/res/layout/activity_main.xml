@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+
+    android:background="#329691"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="32dp">
+
+    <ImageView
+        android:id="@+id/logo"
+        android:layout_width="200dp"
+        android:layout_height="200dp"
+        android:src="@drawable/logo_branca_sem_escrita" />
+
+
+    <TextView
+        android:id="@+id/titleText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="48dp"
+        android:fontFamily="@font/montserrat_extrabold"
+        android:shadowColor="#88000000"
+        android:shadowDx="2"
+        android:shadowDy="2"
+        android:shadowRadius="4"
+        android:text="Dedilharte"
+        android:textColor="#FFFFFF"
+        android:textSize="48sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/welcomeText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="32dp"
+        android:fontFamily="@font/montserrat_semibold"
+        android:text="Bem vindo ao Dedilharte!"
+        android:textColor="#ffffff"
+        android:textSize="24sp" />
+
+    <TextView
+        android:id="@+id/infoText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:fontFamily="@font/montserrat_semibold"
+        android:text="Queremos saber mais de você!"
+        android:textColor="#ffffff"
+        android:textSize="18sp" />
+
+    <TextView
+        android:id="@+id/nameLabel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:fontFamily="@font/montserrat_semibold"
+        android:text="Escreva seu nome:"
+        android:textAlignment="center"
+        android:textColor="#ffffff"
+        android:textSize="16sp" />
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/textInputLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="32dp"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+        app:boxStrokeColor="#E91E63"
+        app:hintTextColor="#E91E63">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/nameInput"
+            android:background="@drawable/textfield_shape"
+            android:backgroundTint="@color/white"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Seu nome completo"
+            android:textColorHint="#808080"
+            android:fontFamily="@font/montserrat_semibold"
+            android:textSize="16sp"
+            android:textColor="#000000"
+            android:inputType="textCapWords|textPersonName" />
+
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/okButton"
+        android:onClick="onOkButtonClick"
+        android:layout_width="178dp"
+        android:layout_height="wrap_content"
+        android:background="@drawable/button_white"
+        android:paddingLeft="48dp"
+        android:paddingTop="12dp"
+        android:paddingRight="48dp"
+        android:paddingBottom="12dp"
+        android:text="OK!"
+        android:textColor="#1c4b49"
+        android:textSize="18sp" />
+
+</LinearLayout>
