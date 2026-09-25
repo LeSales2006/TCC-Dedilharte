@@ -13,7 +13,15 @@ app.get('/health', async (req, res) => {
     await pool.query('SELECT 1');
     return res.json({ ok: true, database: true });
   } catch (error) {
-    return res.status(503).json({ ok: false, database: false });
+    console.error('ERRO AIVEN:', {
+      message: error.message,
+      code: error.code
+    });
+
+    return res.status(503).json({
+      ok: false,
+      database: false
+    });
   }
 });
 
