@@ -158,6 +158,7 @@ public class MainActivity extends AppCompatActivity {
 
     private enum Screen {
         WELCOME,
+        REGISTER,
         LEVEL,
         COURSE,
         LESSON,
@@ -469,7 +470,105 @@ public class MainActivity extends AppCompatActivity {
         showWelcome();
     }
 
+    private void showLogin() {
+        stopPractice();
+        screen = Screen.WELCOME;
+        currentLesson = null;
+        root.removeAllViews();
+
+        LinearLayout page = column(TEAL, Gravity.CENTER);
+        page.setPadding(dp(32), dp(24), dp(32), dp(24));
+        page.addView(logo(178));
+        page.addView(text("Login", 29, WHITE, true, Gravity.CENTER, 0, 14));
+        page.addView(text(
+                "Acesse sua conta para continuar seus estudos no Dedilharte.",
+                16, WHITE, false, Gravity.CENTER, 0, 32
+        ));
+
+        Set<String> accounts = accountIds();
+        if (!accounts.isEmpty()) {
+            page.addView(text("Contas salvas", 17, WHITE, true, Gravity.START, 0, 10));
+            for (String accountId : accounts) {
+                String savedName = profile.getString(accountKey(accountId, "name"), "");
+                if (savedName.trim().isEmpty()) {
+                    continue;
+                }
+                String role = profile.getString(accountKey(accountId, "role"), ROLE_STUDENT);
+                TextView accountButton = button(
+                        savedName + (ROLE_ADMIN.equals(role) ? "  ADMIN" : ""),
+                        WHITE,
+                        DARK,
+                        54
+                );
+                accountButton.setOnClickListener(v -> switchAccount(accountId));
+                page.addView(accountButton, matchWrap(0, 10));
+            }
+        } else {
+            page.addView(text(
+                    "Nenhuma conta cadastrada neste aparelho.",
+                    16, WHITE, true, Gravity.CENTER, 0, 20
+            ));
+        }
+
+        TextView createStudent = button("CADASTRAR ALUNO", CYAN, WHITE, 62);
+        createStudent.setOnClickListener(v -> showRegister(false));
+        page.addView(createStudent, matchWrap(18, 12));
+
+        TextView createAdmin = button("CADASTRAR ADMIN", WHITE, DARK, 58);
+        createAdmin.setOnClickListener(v -> showRegister(true));
+        page.addView(createAdmin, matchWrap(0, 0));
+        root.addView(page, matchMatch());
+    }
+
+    private void showRegister(boolean admin) {
+        stopPractice();
+        screen = Screen.REGISTER;
+        currentLesson = null;
+        root.removeAllViews();
+
+        LinearLayout page = column(TEAL, Gravity.CENTER);
+        page.setPadding(dp(32), dp(24), dp(32), dp(24));
+        page.addView(logo(164));
+        page.addView(text(admin ? "Cadastro Admin" : "Cadastro Aluno", 29, WHITE, true, Gravity.CENTER, 0, 14));
+        page.addView(text(
+                admin
+                        ? "Crie um perfil administrativo para gerenciar musicas e conteudos."
+                        : "Crie seu perfil para acompanhar aulas, musicas e progresso.",
+                16, WHITE, false, Gravity.CENTER, 0, 30
+        ));
+        page.addView(text("Como podemos chamar voce?", 17, WHITE, true, Gravity.START, 0, 10));
+
+        EditText nameInput = input("", "Digite seu nome");
+        page.addView(nameInput, matchWrap(0, 18));
+
+        TextView continueButton = button(admin ? "CRIAR ADMIN" : "CRIAR CONTA", WHITE, DARK, 62);
+        continueButton.setOnClickListener(v -> {
+            String typed = nameInput.getText().toString().trim();
+            if (typed.isEmpty()) {
+                nameInput.setError("Digite seu nome");
+                nameInput.requestFocus();
+                return;
+            }
+            createAccount(typed, admin);
+            if (admin) {
+                showAdminSongs();
+            } else {
+                showLevelChoice();
+            }
+        });
+        page.addView(continueButton, matchWrap(0, 12));
+
+        TextView back = button("VOLTAR PARA LOGIN", CYAN, WHITE, 56);
+        back.setOnClickListener(v -> showWelcome());
+        page.addView(back, matchWrap(0, 0));
+        root.addView(page, matchMatch());
+    }
+
     private void showWelcome() {
+        showLogin();
+    }
+
+    private void showLegacyWelcome() {
         stopPractice();
         screen = Screen.WELCOME;
         currentLesson = null;
@@ -2479,6 +2578,7 @@ public class MainActivity extends AppCompatActivity {
             case COURSE:
                 super.onBackPressed();
                 break;
+            case REGISTER:
             case LEVEL:
                 showWelcome();
                 break;
