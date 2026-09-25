@@ -1,0 +1,14 @@
+Guitar sample source registered for Dedilharte
+
+Recommended source: University of Iowa Electronic Music Studios, Musical Instrument Samples - Guitar.
+Origin: https://theremin.music.uiowa.edu/MISguitar.html
+General license statement: https://theremin.music.uiowa.edu/mis.html
+License terms stated by the source: recordings may be downloaded and used for any projects, without restrictions.
+
+Expected Android resource names for SoundPool:
+app/src/main/res/raw/guitar_e2.wav
+app/src/main/res/raw/guitar_f2.wav
+...
+app/src/main/res/raw/guitar_e4.wav
+
+The app does not fall back to beeps or synthetic tones when samples are missing.

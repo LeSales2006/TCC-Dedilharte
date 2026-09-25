@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/editProfilePanel"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_teal_panel_20"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:paddingLeft="34dp"
+    android:paddingTop="18dp"
+    android:paddingRight="34dp"
+    android:paddingBottom="32dp">
+
+    <TextView
+        android:id="@+id/editClose"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:contentDescription="Fechar"
+        android:gravity="end"
+        android:includeFontPadding="false"
+        android:paddingBottom="2dp"
+        android:text="×"
+        android:textColor="#FFFFFF"
+        android:textSize="34sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/editTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:paddingBottom="28dp"
+        android:text="Editar Perfil"
+        android:textColor="#FFFFFF"
+        android:textSize="31sp"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:id="@+id/editPhotoRow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:id="@+id/editAvatar"
+            android:layout_width="108dp"
+            android:layout_height="108dp"
+            android:background="@drawable/bg_profile_photo"
+            android:contentDescription="Foto de perfil"
+            android:padding="8dp"
+            android:src="@drawable/logo_branca_sem_escrita"
+            android:scaleType="centerCrop" />
+
+        <TextView
+            android:id="@+id/editPhotoButton"
+            android:layout_width="150dp"
+            android:layout_height="66dp"
+            android:layout_marginLeft="20dp"
+            android:background="@drawable/bg_dark_button_16"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:includeFontPadding="false"
+            android:text="Mudar minha&#10;foto"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <EditText
+        android:id="@+id/editName"
+        android:layout_width="match_parent"
+        android:layout_height="58dp"
+        android:layout_marginBottom="14dp"
+        android:background="@drawable/bg_dark_field_16"
+        android:hint="Digite seu nome"
+        android:inputType="textPersonName"
+        android:singleLine="true"
+        android:text="Letícia legal"
+        android:textColor="#FFFFFF"
+        android:textColorHint="#D6EFEF"
+        android:textSize="19sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/editSave"
+        android:layout_width="match_parent"
+        android:layout_height="58dp"
+        android:layout_marginBottom="14dp"
+        android:background="@drawable/bg_cyan_button_16"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:text="Salvar Edições"
+        android:textColor="#FFFFFF"
+        android:textSize="17sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/editCancel"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="@drawable/bg_white_button_16"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:text="Cancelar"
+        android:textColor="#1B4F4C"
+        android:textSize="17sp"
+        android:textStyle="bold" />
+</LinearLayout>

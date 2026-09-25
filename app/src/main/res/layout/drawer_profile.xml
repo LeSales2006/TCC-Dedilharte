@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/drawerProfile"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#1B4F4C"
+    android:orientation="vertical"
+    android:paddingTop="23dp"
+    android:paddingBottom="12dp">
+
+    <ImageView
+        android:id="@+id/drawerAvatar"
+        android:layout_width="132dp"
+        android:layout_height="132dp"
+        android:layout_gravity="center_horizontal"
+        android:background="@drawable/bg_profile_photo"
+        android:contentDescription="Foto de perfil"
+        android:padding="8dp"
+        android:src="@drawable/logo_branca_sem_escrita"
+        android:scaleType="centerCrop" />
+
+    <TextView
+        android:id="@+id/drawerUserName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:paddingTop="14dp"
+        android:paddingBottom="8dp"
+        android:text="Letícia legal"
+        android:textColor="#FFFFFF"
+        android:textSize="19sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/drawerLevel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:paddingBottom="7dp"
+        android:text="Iniciante"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/drawerEditLink"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:paddingBottom="25dp"
+        android:text="Editar perfil"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#D2FFFFFF" />
+
+    <TextView
+        android:id="@+id/drawerBeginner"
+        style="@style/DrawerMenuItem"
+        android:text="Trívia: Iniciante" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#D2FFFFFF" />
+
+    <TextView
+        android:id="@+id/drawerIntermediate"
+        style="@style/DrawerMenuItem"
+        android:text="Trívia: Intermediário" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#D2FFFFFF" />
+
+    <TextView
+        android:id="@+id/drawerArpeggios"
+        style="@style/DrawerMenuItem"
+        android:text="Arpejos" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#D2FFFFFF" />
+
+    <TextView
+        android:id="@+id/drawerSongs"
+        style="@style/DrawerMenuItem"
+        android:text="Todas as músicas" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#D2FFFFFF" />
+
+    <TextView
+        android:id="@+id/drawerAdmin"
+        style="@style/DrawerMenuItem"
+        android:text="Administração" />
+
+    <View
+        android:id="@+id/drawerAdminDivider"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#D2FFFFFF" />
+
+    <TextView
+        android:id="@+id/drawerEditProfile"
+        style="@style/DrawerMenuItem"
+        android:text="Editar perfil" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#D2FFFFFF" />
+
+    <TextView
+        android:id="@+id/drawerLogout"
+        style="@style/DrawerMenuItem"
+        android:text="Sair da conta" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#D2FFFFFF" />
+
+    <TextView
+        android:id="@+id/drawerDeleteAccount"
+        style="@style/DrawerMenuItem"
+        android:text="Excluir conta" />
+
+    <TextView
+        android:id="@+id/drawerCopyright"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="bottom|center_horizontal"
+        android:includeFontPadding="false"
+        android:text="© Dedilharte"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+</LinearLayout>
