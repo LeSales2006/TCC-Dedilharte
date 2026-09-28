@@ -36,6 +36,7 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.example.dedilharte.auth.SessionManager;
 import com.example.dedilharte.audio.GuitarSoundPlayer;
 import com.example.dedilharte.data.LessonRepository;
 import com.example.dedilharte.data.ProgressStore;
@@ -44,6 +45,7 @@ import com.example.dedilharte.data.TablatureParser;
 import com.example.dedilharte.model.Lesson;
 import com.example.dedilharte.model.Song;
 import com.example.dedilharte.model.TablatureEvent;
+import com.example.dedilharte.network.DedilharteApiClient;
 import com.example.dedilharte.network.model.UserResponse;
 import com.example.dedilharte.sync.DedilharteSyncManager;
 import com.example.dedilharte.view.GuitarPracticeView;
@@ -172,6 +174,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private FrameLayout root;
+    private SessionManager sessionManager;
     private SharedPreferences profile;
     private ProgressStore progressStore;
     private DedilharteSyncManager syncManager;
@@ -196,9 +199,22 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         root = findViewById(R.id.root);
+        DedilharteApiClient.configure(getApplicationContext());
+        sessionManager = new SessionManager(this);
+        if (!sessionManager.isLoggedIn()) {
+            openLoginAndFinish();
+            return;
+        }
+
         profile = getSharedPreferences("dedilharte_profile", MODE_PRIVATE);
         migrateLegacyProfileIfNeeded();
-        currentUserId = profile.getString(ACTIVE_USER_ID, "");
+        currentUserId = sessionManager.getUserId();
+        if (currentUserId.trim().isEmpty()) {
+            sessionManager.clearSession();
+            openLoginAndFinish();
+            return;
+        }
+        ensureSessionProfileStored();
         loadActiveProfile();
         progressStore = new ProgressStore(this, currentUserId);
         syncManager = new DedilharteSyncManager();
@@ -276,11 +292,41 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        userName = profile.getString(accountKey(currentUserId, "name"), "");
+        boolean sessionMatches = sessionManager != null && currentUserId.equals(sessionManager.getUserId());
+        String sessionName = sessionMatches ? sessionManager.getName() : "";
+        String sessionRole = sessionMatches ? sessionManager.getRole() : "";
+        userName = !sessionName.trim().isEmpty()
+                ? sessionName
+                : profile.getString(accountKey(currentUserId, "name"), "");
         level = profile.getString(accountKey(currentUserId, "level"), LessonRepository.BEGINNER);
-        userRole = profile.getString(accountKey(currentUserId, "role"), ROLE_STUDENT);
+        userRole = !sessionRole.trim().isEmpty()
+                ? sessionRole
+                : profile.getString(accountKey(currentUserId, "role"), ROLE_STUDENT);
         profilePhotoUri = profile.getString(accountKey(currentUserId, "photo_uri"), "");
         soundEnabled = profile.getBoolean(accountKey(currentUserId, "sound_enabled"), true);
+    }
+
+    private void ensureSessionProfileStored() {
+        if (currentUserId.trim().isEmpty()) {
+            return;
+        }
+        Set<String> accounts = accountIds();
+        accounts.add(currentUserId);
+        SharedPreferences.Editor editor = profile.edit()
+                .putStringSet(ACCOUNT_IDS, accounts)
+                .putString(ACTIVE_USER_ID, currentUserId)
+                .putString(accountKey(currentUserId, "name"), sessionManager.getName())
+                .putString(accountKey(currentUserId, "role"), sessionManager.getRole());
+        if (!profile.contains(accountKey(currentUserId, "level"))) {
+            editor.putString(accountKey(currentUserId, "level"), LessonRepository.BEGINNER);
+        }
+        if (!profile.contains(accountKey(currentUserId, "sound_enabled"))) {
+            editor.putBoolean(accountKey(currentUserId, "sound_enabled"), true);
+        }
+        if (!profile.contains(accountKey(currentUserId, "updated_at"))) {
+            editor.putLong(accountKey(currentUserId, "updated_at"), System.currentTimeMillis());
+        }
+        editor.apply();
     }
 
     private void saveActiveProfile() {
@@ -294,6 +340,9 @@ public class MainActivity extends AppCompatActivity {
                 .putString(accountKey(currentUserId, "photo_uri"), profilePhotoUri)
                 .putBoolean(accountKey(currentUserId, "sound_enabled"), soundEnabled)
                 .apply();
+        if (sessionManager != null && currentUserId.equals(sessionManager.getUserId())) {
+            sessionManager.updateUser(userName, sessionManager.getEmail(), userRole);
+        }
     }
 
     private void markActiveUserUpdated() {
@@ -370,6 +419,9 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         userName = remoteUser.name == null ? userName : remoteUser.name;
+        if (remoteUser.role != null) {
+            userRole = remoteUser.role;
+        }
         setActiveUserUpdatedAt(remoteUser.updatedAtMillis);
         saveActiveProfile();
         if (screen == Screen.PROGRESS) {
@@ -416,10 +468,22 @@ public class MainActivity extends AppCompatActivity {
         stopPractice();
         currentLesson = null;
         currentUserId = "";
+        if (sessionManager != null) {
+            sessionManager.clearSession();
+        }
         profile.edit().remove(ACTIVE_USER_ID).apply();
         loadActiveProfile();
-        progressStore.setUserId(currentUserId);
-        showWelcome();
+        if (progressStore != null) {
+            progressStore.setUserId(currentUserId);
+        }
+        openLoginAndFinish();
+    }
+
+    private void openLoginAndFinish() {
+        Intent intent = new Intent(this, LoginActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
+        finish();
     }
 
     private void confirmDeleteAccount() {
@@ -464,104 +528,21 @@ public class MainActivity extends AppCompatActivity {
         syncManager.deleteUser(deletedUserId);
         progressStore.deleteUserData(deletedUserId);
         currentUserId = "";
+        if (sessionManager != null) {
+            sessionManager.clearSession();
+        }
         loadActiveProfile();
         progressStore.setUserId(currentUserId);
         Toast.makeText(this, "Conta excluida", Toast.LENGTH_SHORT).show();
-        showWelcome();
+        openLoginAndFinish();
     }
 
     private void showLogin() {
-        stopPractice();
-        screen = Screen.WELCOME;
-        currentLesson = null;
-        root.removeAllViews();
-
-        LinearLayout page = column(TEAL, Gravity.CENTER);
-        page.setPadding(dp(32), dp(24), dp(32), dp(24));
-        page.addView(logo(178));
-        page.addView(text("Login", 29, WHITE, true, Gravity.CENTER, 0, 14));
-        page.addView(text(
-                "Acesse sua conta para continuar seus estudos no Dedilharte.",
-                16, WHITE, false, Gravity.CENTER, 0, 32
-        ));
-
-        Set<String> accounts = accountIds();
-        if (!accounts.isEmpty()) {
-            page.addView(text("Contas salvas", 17, WHITE, true, Gravity.START, 0, 10));
-            for (String accountId : accounts) {
-                String savedName = profile.getString(accountKey(accountId, "name"), "");
-                if (savedName.trim().isEmpty()) {
-                    continue;
-                }
-                String role = profile.getString(accountKey(accountId, "role"), ROLE_STUDENT);
-                TextView accountButton = button(
-                        savedName + (ROLE_ADMIN.equals(role) ? "  ADMIN" : ""),
-                        WHITE,
-                        DARK,
-                        54
-                );
-                accountButton.setOnClickListener(v -> switchAccount(accountId));
-                page.addView(accountButton, matchWrap(0, 10));
-            }
-        } else {
-            page.addView(text(
-                    "Nenhuma conta cadastrada neste aparelho.",
-                    16, WHITE, true, Gravity.CENTER, 0, 20
-            ));
-        }
-
-        TextView createStudent = button("CADASTRAR ALUNO", CYAN, WHITE, 62);
-        createStudent.setOnClickListener(v -> showRegister(false));
-        page.addView(createStudent, matchWrap(18, 12));
-
-        TextView createAdmin = button("CADASTRAR ADMIN", WHITE, DARK, 58);
-        createAdmin.setOnClickListener(v -> showRegister(true));
-        page.addView(createAdmin, matchWrap(0, 0));
-        root.addView(page, matchMatch());
+        openLoginAndFinish();
     }
 
     private void showRegister(boolean admin) {
-        stopPractice();
-        screen = Screen.REGISTER;
-        currentLesson = null;
-        root.removeAllViews();
-
-        LinearLayout page = column(TEAL, Gravity.CENTER);
-        page.setPadding(dp(32), dp(24), dp(32), dp(24));
-        page.addView(logo(164));
-        page.addView(text(admin ? "Cadastro Admin" : "Cadastro Aluno", 29, WHITE, true, Gravity.CENTER, 0, 14));
-        page.addView(text(
-                admin
-                        ? "Crie um perfil administrativo para gerenciar musicas e conteudos."
-                        : "Crie seu perfil para acompanhar aulas, musicas e progresso.",
-                16, WHITE, false, Gravity.CENTER, 0, 30
-        ));
-        page.addView(text("Como podemos chamar voce?", 17, WHITE, true, Gravity.START, 0, 10));
-
-        EditText nameInput = input("", "Digite seu nome");
-        page.addView(nameInput, matchWrap(0, 18));
-
-        TextView continueButton = button(admin ? "CRIAR ADMIN" : "CRIAR CONTA", WHITE, DARK, 62);
-        continueButton.setOnClickListener(v -> {
-            String typed = nameInput.getText().toString().trim();
-            if (typed.isEmpty()) {
-                nameInput.setError("Digite seu nome");
-                nameInput.requestFocus();
-                return;
-            }
-            createAccount(typed, admin);
-            if (admin) {
-                showAdminSongs();
-            } else {
-                showLevelChoice();
-            }
-        });
-        page.addView(continueButton, matchWrap(0, 12));
-
-        TextView back = button("VOLTAR PARA LOGIN", CYAN, WHITE, 56);
-        back.setOnClickListener(v -> showWelcome());
-        page.addView(back, matchWrap(0, 0));
-        root.addView(page, matchMatch());
+        startActivity(new Intent(this, RegisterActivity.class));
     }
 
     private void showWelcome() {

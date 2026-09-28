@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('./db');
+const authRoutes = require('./routes/auth');
 const usersRoutes = require('./routes/users');
 require('dotenv').config();
 
@@ -25,6 +26,7 @@ app.get('/health', async (req, res) => {
   }
 });
 
+app.use('/api/auth', authRoutes);
 app.use('/api', usersRoutes);
 
 app.use((req, res) => {

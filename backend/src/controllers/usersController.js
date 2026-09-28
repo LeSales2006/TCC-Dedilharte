@@ -16,6 +16,8 @@ function toUser(row) {
   return {
     id: row.id,
     name: row.name,
+    email: row.email,
+    role: row.role,
     created_at: row.created_at,
     updated_at: row.updated_at,
     updatedAtMillis: row.updated_at ? new Date(row.updated_at).getTime() : Date.now(),
@@ -31,6 +33,9 @@ async function upsertUser(req, res, next) {
     if (!id || !name) {
       return res.status(400).json({ error: 'id e name sao obrigatorios.' });
     }
+    if (!req.user || (req.user.role !== 'admin' && req.user.id !== id)) {
+      return res.status(403).json({ error: 'Acesso negado.' });
+    }
 
     const result = await pool.query(
       `INSERT INTO users (id, name, updated_at)
@@ -41,7 +46,7 @@ async function upsertUser(req, res, next) {
                ELSE users.name
            END,
            updated_at = GREATEST(users.updated_at, EXCLUDED.updated_at)
-       RETURNING id, name, created_at, updated_at`,
+       RETURNING id, name, email, role, created_at, updated_at`,
       [id, name, updatedAt]
     );
 
@@ -54,7 +59,7 @@ async function upsertUser(req, res, next) {
 async function getUser(req, res, next) {
   try {
     const result = await pool.query(
-      'SELECT id, name, created_at, updated_at FROM users WHERE id = $1',
+      'SELECT id, name, email, role, created_at, updated_at FROM users WHERE id = $1',
       [req.params.id]
     );
     if (result.rowCount === 0) {
@@ -83,7 +88,7 @@ async function updateUser(req, res, next) {
            END,
            updated_at = GREATEST(updated_at, $3)
        WHERE id = $1
-       RETURNING id, name, created_at, updated_at`,
+       RETURNING id, name, email, role, created_at, updated_at`,
       [req.params.id, name, updatedAt]
     );
 

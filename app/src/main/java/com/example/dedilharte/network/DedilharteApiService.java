@@ -1,8 +1,11 @@
 package com.example.dedilharte.network;
 
+import com.example.dedilharte.network.model.AuthResponse;
+import com.example.dedilharte.network.model.LoginRequest;
 import com.example.dedilharte.network.model.ProgressRequest;
 import com.example.dedilharte.network.model.ProgressResponse;
 import com.example.dedilharte.network.model.ProgressListResponse;
+import com.example.dedilharte.network.model.RegisterRequest;
 import com.example.dedilharte.network.model.UserRequest;
 import com.example.dedilharte.network.model.UserResponse;
 
@@ -15,6 +18,15 @@ import retrofit2.http.PUT;
 import retrofit2.http.Path;
 
 public interface DedilharteApiService {
+
+    @POST("api/auth/register")
+    Call<AuthResponse> register(@Body RegisterRequest request);
+
+    @POST("api/auth/login")
+    Call<AuthResponse> login(@Body LoginRequest request);
+
+    @GET("api/auth/me")
+    Call<AuthResponse> me();
 
     @POST("api/users")
     Call<UserResponse> upsertUser(@Body UserRequest request);

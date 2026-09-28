@@ -1,11 +1,8 @@
 package com.example.dedilharte.network.model;
 
-public final class UserResponse {
+public final class AuthenticatedUser {
     public String id;
     public String name;
     public String email;
     public String role;
-    public String created_at;
-    public String updated_at;
-    public long updatedAtMillis;
 }
