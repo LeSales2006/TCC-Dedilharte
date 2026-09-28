@@ -64,6 +64,14 @@ function signToken(user) {
   );
 }
 
+function ensureJwtSecret(res) {
+  if (process.env.JWT_SECRET) {
+    return true;
+  }
+  res.status(500).json({ error: 'JWT_SECRET nao configurado.' });
+  return false;
+}
+
 async function register(req, res, next) {
   try {
     const name = normalizeName(req.body.name);
@@ -73,6 +81,9 @@ async function register(req, res, next) {
     const validationError = validateName(name) || validateEmail(email) || validatePassword(password);
     if (validationError) {
       return res.status(400).json({ error: validationError });
+    }
+    if (!ensureJwtSecret(res)) {
+      return undefined;
     }
 
     const existingUser = await pool.query(
@@ -109,6 +120,9 @@ async function login(req, res, next) {
 
     if (validateEmail(email) || typeof password !== 'string' || password.length === 0) {
       return res.status(400).json({ error: 'Dados invalidos.' });
+    }
+    if (!ensureJwtSecret(res)) {
+      return undefined;
     }
 
     const result = await pool.query(
