@@ -45,6 +45,10 @@ function toAuthenticatedUser(row) {
     name: row.name,
     email: row.email,
     role: row.role,
+    weeklyGoal: row.weekly_goal || 3,
+    mustChangePassword: Boolean(row.must_change_password),
+    hasPhoto: Boolean(row.has_photo),
+    profilePhotoUpdatedAt: row.profile_photo_updated_at || null,
   };
 }
 
@@ -55,6 +59,7 @@ function signToken(user) {
   return jwt.sign(
     {
       role: user.role,
+      tokenVersion: Number(user.tokenVersion || user.token_version || 0),
     },
     process.env.JWT_SECRET,
     {
@@ -99,11 +104,13 @@ async function register(req, res, next) {
     const result = await pool.query(
       `INSERT INTO users (id, name, email, password_hash, role, updated_at)
        VALUES ($1, $2, $3, $4, 'student', NOW())
-       RETURNING id, name, email, role`,
+       RETURNING id, name, email, role, weekly_goal, token_version, must_change_password,
+                 (profile_photo IS NOT NULL) AS has_photo, profile_photo_updated_at`,
       [id, name, email, passwordHash]
     );
 
     const user = toAuthenticatedUser(result.rows[0]);
+    user.tokenVersion = Number(result.rows[0].token_version || 0);
     return res.status(201).json({
       token: signToken(user),
       user,
@@ -126,7 +133,9 @@ async function login(req, res, next) {
     }
 
     const result = await pool.query(
-      `SELECT id, name, email, password_hash, role
+      `SELECT id, name, email, password_hash, role, weekly_goal, account_status,
+              token_version, must_change_password,
+              (profile_photo IS NOT NULL) AS has_photo, profile_photo_updated_at
        FROM users
        WHERE LOWER(email) = LOWER($1)`,
       [email]
@@ -141,7 +150,12 @@ async function login(req, res, next) {
       return res.status(401).json({ error: 'E-mail ou senha inválidos.' });
     }
 
+    if (row.account_status === 'blocked') {
+      return res.status(403).json({ error: 'Conta bloqueada.' });
+    }
+
     const user = toAuthenticatedUser(row);
+    user.tokenVersion = Number(row.token_version || 0);
     return res.json({
       token: signToken(user),
       user,
@@ -154,7 +168,10 @@ async function login(req, res, next) {
 async function me(req, res, next) {
   try {
     const result = await pool.query(
-      'SELECT id, name, email, role FROM users WHERE id = $1',
+      `SELECT id, name, email, role, weekly_goal, must_change_password,
+              (profile_photo IS NOT NULL) AS has_photo, profile_photo_updated_at
+       FROM users
+       WHERE id = $1`,
       [req.user.id]
     );
     if (result.rowCount === 0) {

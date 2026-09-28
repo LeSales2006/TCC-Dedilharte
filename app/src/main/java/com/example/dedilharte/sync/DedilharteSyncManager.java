@@ -10,6 +10,9 @@ import com.example.dedilharte.network.DedilharteApiService;
 import com.example.dedilharte.network.model.ProgressListResponse;
 import com.example.dedilharte.network.model.ProgressRequest;
 import com.example.dedilharte.network.model.ProgressResponse;
+import com.example.dedilharte.network.model.SongProgressListResponse;
+import com.example.dedilharte.network.model.SongProgressRequest;
+import com.example.dedilharte.network.model.SongProgressResponse;
 import com.example.dedilharte.network.model.UserRequest;
 import com.example.dedilharte.network.model.UserResponse;
 
@@ -30,12 +33,40 @@ public final class DedilharteSyncManager {
         api = DedilharteApiClient.service();
     }
 
-    public void syncUser(String userId, String name, long updatedAtMillis) {
+    public void syncUser(String userId, String name, int weeklyGoal, long updatedAtMillis) {
         if (isBlank(userId) || isBlank(name)) {
             return;
         }
-        api.upsertUser(new UserRequest(userId, name, validTimestamp(updatedAtMillis)))
+        api.upsertUser(new UserRequest(userId, name, weeklyGoal, validTimestamp(updatedAtMillis)))
                 .enqueue(new LoggingCallback<>("syncUser"));
+    }
+
+    public void updateProfile(String name, int weeklyGoal, long updatedAtMillis, UserSyncCallback callback) {
+        if (isBlank(name)) {
+            return;
+        }
+        api.updateProfile(new UserRequest("", name, weeklyGoal, validTimestamp(updatedAtMillis)))
+                .enqueue(new Callback<UserResponse>() {
+                    @Override
+                    public void onResponse(Call<UserResponse> call, Response<UserResponse> response) {
+                        if (!response.isSuccessful() || response.body() == null) {
+                            logHttp("updateProfile", response.code());
+                            return;
+                        }
+                        if (callback != null) {
+                            mainHandler.post(() -> callback.onRemoteUser(response.body()));
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<UserResponse> call, Throwable t) {
+                        Log.e(TAG, "updateProfile falhou: " + t.getMessage());
+                    }
+                });
+    }
+
+    public void recordActivity() {
+        api.recordActivity().enqueue(new LoggingCallback<>("recordActivity"));
     }
 
     public void fetchRemoteUser(String userId, UserSyncCallback callback) {
@@ -137,6 +168,34 @@ public final class DedilharteSyncManager {
         });
     }
 
+    public void syncSongProgress(String songId, boolean learned) {
+        if (isBlank(songId)) {
+            return;
+        }
+        api.upsertSongProgress(new SongProgressRequest(songId, learned))
+                .enqueue(new LoggingCallback<>("syncSongProgress"));
+    }
+
+    public void fetchSongProgress(SongProgressCallback callback) {
+        api.getSongProgress().enqueue(new Callback<SongProgressListResponse>() {
+            @Override
+            public void onResponse(Call<SongProgressListResponse> call, Response<SongProgressListResponse> response) {
+                if (!response.isSuccessful() || response.body() == null || response.body().items == null) {
+                    logHttp("fetchSongProgress", response.code());
+                    return;
+                }
+                if (callback != null) {
+                    mainHandler.post(() -> callback.onRemoteSongProgress(response.body().items));
+                }
+            }
+
+            @Override
+            public void onFailure(Call<SongProgressListResponse> call, Throwable t) {
+                Log.e(TAG, "fetchSongProgress falhou: " + t.getMessage());
+            }
+        });
+    }
+
     private long validTimestamp(long updatedAtMillis) {
         return updatedAtMillis > 0 ? updatedAtMillis : System.currentTimeMillis();
     }
@@ -171,5 +230,9 @@ public final class DedilharteSyncManager {
 
     public interface UserSyncCallback {
         void onRemoteUser(UserResponse user);
+    }
+
+    public interface SongProgressCallback {
+        void onRemoteSongProgress(List<SongProgressResponse> items);
     }
 }

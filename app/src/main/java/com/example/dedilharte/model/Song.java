@@ -5,6 +5,9 @@ public final class Song {
     public static final String DRAFT = "rascunho";
     public static final String PUBLISHED = "publicada";
     public static final String ARCHIVED = "arquivada";
+    public static final String EASY = "easy";
+    public static final String MEDIUM = "medium";
+    public static final String HARD = "hard";
 
     private final String id;
     private final String title;
@@ -34,7 +37,7 @@ public final class Song {
         this.id = id;
         this.title = title;
         this.artist = artist;
-        this.difficulty = difficulty;
+        this.difficulty = normalizeDifficulty(difficulty);
         this.recommendedBpm = recommendedBpm;
         this.tablature = tablature;
         this.queueOrder = queueOrder;
@@ -57,7 +60,19 @@ public final class Song {
     }
 
     public String getDifficulty() {
-        return difficulty;
+        return difficultyLabel(difficulty);
+    }
+
+    public String normalizedDifficulty() {
+        return normalizeDifficulty(difficulty);
+    }
+
+    public String difficultyLabel() {
+        return difficultyLabel(difficulty);
+    }
+
+    public int difficultyWeight() {
+        return difficultyWeight(difficulty);
     }
 
     public int getRecommendedBpm() {
@@ -110,5 +125,51 @@ public final class Song {
                 createdAt,
                 System.currentTimeMillis()
         );
+    }
+
+    public static String normalizeDifficulty(String value) {
+        if (value == null) {
+            return EASY;
+        }
+        String normalized = value.trim().toLowerCase(java.util.Locale.ROOT);
+        if (normalized.equals(MEDIUM)
+                || normalized.equals("media")
+                || normalized.equals("média")
+                || normalized.equals("intermediario")
+                || normalized.equals("intermediário")) {
+            return MEDIUM;
+        }
+        if (normalized.equals(HARD)
+                || normalized.equals("dificil")
+                || normalized.equals("difícil")
+                || normalized.equals("avancado")
+                || normalized.equals("avançado")) {
+            return HARD;
+        }
+        return EASY;
+    }
+
+    public static String difficultyLabel(String value) {
+        switch (normalizeDifficulty(value)) {
+            case MEDIUM:
+                return "Média";
+            case HARD:
+                return "Difícil";
+            case EASY:
+            default:
+                return "Fácil";
+        }
+    }
+
+    public static int difficultyWeight(String value) {
+        switch (normalizeDifficulty(value)) {
+            case MEDIUM:
+                return 2;
+            case HARD:
+                return 3;
+            case EASY:
+            default:
+                return 1;
+        }
     }
 }

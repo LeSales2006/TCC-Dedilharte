@@ -13,6 +13,7 @@ public final class SessionManager {
     private static final String KEY_NAME = "name";
     private static final String KEY_EMAIL = "email";
     private static final String KEY_ROLE = "role";
+    private static final String KEY_WEEKLY_GOAL = "weekly_goal";
 
     private final SharedPreferences preferences;
 
@@ -25,24 +26,34 @@ public final class SessionManager {
         if (user == null) {
             return;
         }
-        saveSession(token, user.id, user.name, user.email, user.role);
+        saveSession(token, user.id, user.name, user.email, user.role, user.weeklyGoal);
     }
 
     public void saveSession(String token, String userId, String name, String email, String role) {
+        saveSession(token, userId, name, email, role, 3);
+    }
+
+    public void saveSession(String token, String userId, String name, String email, String role, int weeklyGoal) {
         preferences.edit()
                 .putString(KEY_TOKEN, safe(token))
                 .putString(KEY_USER_ID, safe(userId))
                 .putString(KEY_NAME, safe(name))
                 .putString(KEY_EMAIL, safe(email))
                 .putString(KEY_ROLE, normalizeRole(role))
+                .putInt(KEY_WEEKLY_GOAL, clampWeeklyGoal(weeklyGoal))
                 .apply();
     }
 
     public void updateUser(String name, String email, String role) {
+        updateUser(name, email, role, getWeeklyGoal());
+    }
+
+    public void updateUser(String name, String email, String role, int weeklyGoal) {
         preferences.edit()
                 .putString(KEY_NAME, safe(name))
                 .putString(KEY_EMAIL, safe(email))
                 .putString(KEY_ROLE, normalizeRole(role))
+                .putInt(KEY_WEEKLY_GOAL, clampWeeklyGoal(weeklyGoal))
                 .apply();
     }
 
@@ -66,6 +77,10 @@ public final class SessionManager {
         return preferences.getString(KEY_ROLE, "student");
     }
 
+    public int getWeeklyGoal() {
+        return clampWeeklyGoal(preferences.getInt(KEY_WEEKLY_GOAL, 3));
+    }
+
     public boolean isLoggedIn() {
         return !getToken().trim().isEmpty() && !getUserId().trim().isEmpty();
     }
@@ -79,6 +94,16 @@ public final class SessionManager {
     }
 
     private String normalizeRole(String role) {
-        return "admin".equals(role) ? "admin" : "student";
+        if ("admin".equals(role)) {
+            return "admin";
+        }
+        if ("configurator".equals(role)) {
+            return "configurator";
+        }
+        return "student";
+    }
+
+    private int clampWeeklyGoal(int weeklyGoal) {
+        return Math.max(1, Math.min(7, weeklyGoal));
     }
 }

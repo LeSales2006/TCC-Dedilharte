@@ -17,6 +17,7 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.dedilharte.auth.SessionManager;
+import com.example.dedilharte.data.ThemeStore;
 import com.example.dedilharte.network.DedilharteApiClient;
 import com.example.dedilharte.network.DedilharteApiService;
 import com.example.dedilharte.network.model.AuthResponse;
@@ -47,6 +48,7 @@ public final class RegisterActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        new ThemeStore(this).applySavedMode();
         super.onCreate(savedInstanceState);
         DedilharteApiClient.configure(getApplicationContext());
         sessionManager = new SessionManager(this);

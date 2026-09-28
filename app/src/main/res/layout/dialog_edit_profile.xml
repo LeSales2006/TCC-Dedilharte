@@ -86,6 +86,66 @@
         android:textStyle="bold" />
 
     <TextView
+        android:id="@+id/editGoalLabel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:includeFontPadding="false"
+        android:paddingTop="2dp"
+        android:paddingBottom="10dp"
+        android:text="Meta semanal"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:id="@+id/editGoalRow"
+        android:layout_width="match_parent"
+        android:layout_height="58dp"
+        android:layout_marginBottom="16dp"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/editGoalMinus"
+            android:layout_width="58dp"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_dark_button_16"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:text="-"
+            android:textColor="#FFFFFF"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/editGoalValue"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginLeft="10dp"
+            android:layout_marginRight="10dp"
+            android:background="@drawable/bg_dark_field_16"
+            android:gravity="center"
+            android:textColor="#FFFFFF"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/editGoalPlus"
+            android:layout_width="58dp"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_dark_button_16"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:text="+"
+            android:textColor="#FFFFFF"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <TextView
         android:id="@+id/editSave"
         android:layout_width="match_parent"
         android:layout_height="58dp"

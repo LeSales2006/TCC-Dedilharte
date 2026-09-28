@@ -96,7 +96,7 @@ public final class SongRepository {
                 "seed_asa_branca",
                 "Asa Branca - estudo inicial",
                 "Luiz Gonzaga / Humberto Teixeira",
-                "Iniciante",
+                Song.EASY,
                 90,
                 "E|--0---1---3---0---|\n" +
                         "B|--1---1---0---1---|\n" +
@@ -124,7 +124,7 @@ public final class SongRepository {
                         item.getString("id"),
                         item.getString("title"),
                         item.optString("artist", ""),
-                        item.optString("difficulty", "Iniciante"),
+                        Song.normalizeDifficulty(item.optString("difficulty", Song.EASY)),
                         item.optInt("recommendedBpm", 60),
                         item.optString("tablature", ""),
                         item.optInt("queueOrder", i + 1),
@@ -148,7 +148,7 @@ public final class SongRepository {
                 item.put("id", song.getId());
                 item.put("title", song.getTitle());
                 item.put("artist", song.getArtist());
-                item.put("difficulty", song.getDifficulty());
+                item.put("difficulty", song.normalizedDifficulty());
                 item.put("recommendedBpm", song.getRecommendedBpm());
                 item.put("tablature", song.getTablature());
                 item.put("queueOrder", song.getQueueOrder());

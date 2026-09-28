@@ -34,8 +34,6 @@ public final class ProgressStore {
         if (!preferences.getBoolean(initializedKey(), false)) {
             preferences.edit()
                     .putBoolean(initializedKey(), true)
-                    .putBoolean(completedKey("ini_1"), true)
-                    .putLong(updatedAtKey("ini_1"), System.currentTimeMillis())
                     .apply();
         }
     }
@@ -106,8 +104,6 @@ public final class ProgressStore {
             }
         }
         editor.putBoolean(initializedKey(), true);
-        editor.putBoolean(completedKey("ini_1"), true);
-        editor.putLong(updatedAtKey("ini_1"), System.currentTimeMillis());
         editor.apply();
     }
 
