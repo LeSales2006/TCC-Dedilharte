@@ -89,6 +89,26 @@
         android:background="#D2FFFFFF" />
 
     <TextView
+        android:id="@+id/drawerTriviaBeginner"
+        style="@style/DrawerMenuItem"
+        android:text="Trilha Iniciante" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#D2FFFFFF" />
+
+    <TextView
+        android:id="@+id/drawerTriviaIntermediate"
+        style="@style/DrawerMenuItem"
+        android:text="Trilha Intermediário" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#D2FFFFFF" />
+
+    <TextView
         android:id="@+id/drawerArpeggios"
         style="@style/DrawerMenuItem"
         android:text="Arpejos" />

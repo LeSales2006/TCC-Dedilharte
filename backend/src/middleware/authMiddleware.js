@@ -69,8 +69,8 @@ function requireAdmin(req, res, next) {
 }
 
 function requireStaff(req, res, next) {
-  if (!req.user || !['admin', 'configurator'].includes(req.user.role)) {
-    return res.status(403).json({ error: 'Acesso restrito a equipe.' });
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Acesso restrito a administradores.' });
   }
   return next();
 }

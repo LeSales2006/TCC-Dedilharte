@@ -37,6 +37,7 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.dedilharte.auth.SessionManager;
@@ -64,7 +65,9 @@ import com.example.dedilharte.network.model.ModuleProgressRequest;
 import com.example.dedilharte.network.model.ArpeggioNote;
 import com.example.dedilharte.network.model.ArpeggioRequest;
 import com.example.dedilharte.network.model.ArpeggioResponse;
+import com.example.dedilharte.network.model.RoleUpdateRequest;
 import com.example.dedilharte.network.model.SongProgressResponse;
+import com.example.dedilharte.network.model.UserListResponse;
 import com.example.dedilharte.network.model.UserResponse;
 import com.example.dedilharte.sync.DedilharteSyncManager;
 import com.example.dedilharte.view.GuitarPracticeView;
@@ -86,9 +89,9 @@ import retrofit2.Callback;
 import retrofit2.Response;
 
 /**
- * Aplicativo educacional offline para o ensino de dedilhado no violÃ£o.
+ * Aplicativo educacional offline para o ensino de dedilhado no violão.
  *
- * Compatibilidade mÃ­nima: Android 7.0 (API 24).
+ * Compatibilidade mínima: Android 7.0 (API 24).
  */
 public class MainActivity extends AppCompatActivity {
 
@@ -99,6 +102,8 @@ public class MainActivity extends AppCompatActivity {
     private static final String ROLE_ADMIN = "admin";
     private static final String ROLE_CONFIGURATOR = "configurator";
     private static final String ROLE_STUDENT = "student";
+    private static final String MODULE_TRIVIA_BEGINNER = "module_trivia_beginner";
+    private static final String MODULE_TRIVIA_INTERMEDIATE = "module_trivia_intermediate";
     private static final int TEAL = Color.rgb(50, 150, 145);
     private static final int DARK = Color.rgb(27, 79, 76);
     private static final int CYAN = Color.rgb(84, 214, 221);
@@ -266,6 +271,12 @@ public class MainActivity extends AppCompatActivity {
         themeStore.applySavedMode();
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                handleBackNavigation();
+            }
+        });
 
         root = findViewById(R.id.root);
         DedilharteApiClient.configure(getApplicationContext());
@@ -309,15 +320,12 @@ public class MainActivity extends AppCompatActivity {
             showWelcome();
         } else if (isConfigurator()) {
             synchronizeCurrentUser(false);
-            fetchDynamicModules(null);
             showConfiguratorDashboard();
         } else if (isAdmin()) {
             synchronizeCurrentUser(false);
-            fetchDynamicModules(null);
             showAdminDashboard();
         } else {
             synchronizeCurrentUser(false);
-            fetchDynamicModules(null);
             showCourse(level);
         }
     }
@@ -679,7 +687,7 @@ public class MainActivity extends AppCompatActivity {
         }
         new AlertDialog.Builder(this)
                 .setTitle("Excluir sua conta?")
-                .setMessage("Seu perfil e progresso serÃ£o removidos permanentemente.\nEsta aÃ§Ã£o nÃ£o pode ser desfeita.")
+                .setMessage("Seu perfil e progresso serão removidos permanentemente.\nEsta ação não pode ser desfeita.")
                 .setNegativeButton("Cancelar", null)
                 .setPositiveButton("Excluir conta", (dialog, which) -> deleteCurrentAccount())
                 .show();
@@ -754,7 +762,7 @@ public class MainActivity extends AppCompatActivity {
         page.addView(logo(178));
         page.addView(text("Boas-vindas!", 23, WHITE, true, Gravity.CENTER, 0, 14));
         page.addView(text(
-                "Aprenda dedilhado no seu ritmo, com exercÃ­cios visuais e prÃ¡tica guiada.",
+                "Aprenda dedilhado no seu ritmo, com exercícios visuais e prática guiada.",
                 16, WHITE, false, Gravity.CENTER, 0, 34
         ));
 
@@ -772,7 +780,7 @@ public class MainActivity extends AppCompatActivity {
             }
             page.addView(text("Ou crie uma nova conta", 17, WHITE, true, Gravity.START, 10, 10));
         } else {
-            page.addView(text("Como podemos chamar vocÃª?", 17, WHITE, true, Gravity.START, 0, 10));
+            page.addView(text("Como podemos chamar você?", 17, WHITE, true, Gravity.START, 0, 10));
         }
 
         EditText nameInput = input("", "Digite seu nome");
@@ -803,11 +811,11 @@ public class MainActivity extends AppCompatActivity {
         page.addView(logo(164));
         page.addView(text("Dedilharte", 29, WHITE, true, Gravity.CENTER, 4, 54));
         page.addView(text(
-                firstName() + ", qual Ã© o seu nÃ­vel atual?",
+                firstName() + ", qual é o seu nível atual?",
                 21, WHITE, true, Gravity.CENTER, 0, 10
         ));
         page.addView(text(
-                "VocÃª poderÃ¡ trocar de trilha a qualquer momento.",
+                "Você poderá trocar de trilha a qualquer momento.",
                 15, WHITE, false, Gravity.CENTER, 0, 30
         ));
 
@@ -815,7 +823,7 @@ public class MainActivity extends AppCompatActivity {
         beginner.setOnClickListener(v -> chooseLevel(LessonRepository.BEGINNER));
         page.addView(beginner, matchWrap(0, 16));
 
-        TextView intermediate = button("INTERMEDIÃRIO", WHITE, DARK, 64);
+        TextView intermediate = button("INTERMEDIÁRIO", WHITE, DARK, 64);
         intermediate.setOnClickListener(v -> chooseLevel(LessonRepository.INTERMEDIATE));
         page.addView(intermediate, matchWrap(0, 0));
         root.addView(page, matchMatch());
@@ -843,17 +851,18 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(24), dp(24), dp(24), dp(32));
 
-        content.addView(text("OlÃ¡, " + firstName() + "!", 18, TEAL, true, Gravity.START, 0, 6));
+        content.addView(text("Olá, " + firstName() + "!", 18, TEAL, true, Gravity.START, 0, 6));
         content.addView(text(
                 "Trilha " + selectedLevel,
                 30, DARK, true, Gravity.START, 0, 8
         ));
         content.addView(text(
                 selectedLevel.equals(LessonRepository.BEGINNER)
-                        ? "Comece pelas cordas e avance atÃ© seu primeiro acompanhamento completo."
-                        : "Desenvolva coordenaÃ§Ã£o, variaÃ§Ãµes rÃ­tmicas e arpejos mais completos.",
+                        ? "Comece pelas cordas e avance até seu primeiro acompanhamento completo."
+                        : "Desenvolva coordenação, variações rítmicas e arpejos mais completos.",
                 15, TEXT, false, Gravity.START, 0, 18
         ));
+        content.addView(trackSwitchPanel(selectedLevel), matchWrap(0, 18));
 
         List<Lesson> lessons = LessonRepository.getLessons(selectedLevel);
         int completed = progressStore.completedCount(lessons);
@@ -870,7 +879,10 @@ public class MainActivity extends AppCompatActivity {
             content.addView(continueButton, matchWrap(0, 24));
         }
 
-        content.addView(text("Aulas", 22, DARK, true, Gravity.START, 0, 12));
+        content.addView(text(
+                selectedLevel.equals(LessonRepository.INTERMEDIATE) ? "Exercícios intermediários" : "Aulas",
+                22, DARK, true, Gravity.START, 0, 12
+        ));
         for (Lesson lesson : lessons) {
             TextView card = lessonCard(lesson);
             card.setOnClickListener(v -> showLessonDetail(lesson));
@@ -882,13 +894,45 @@ public class MainActivity extends AppCompatActivity {
         root.addView(shell, matchMatch());
     }
 
+    private View trackSwitchPanel(String selectedLevel) {
+        LinearLayout panel = column(SOFT, Gravity.TOP);
+        panel.setPadding(dp(16), dp(14), dp(16), dp(16));
+        panel.setBackground(roundRect(SOFT, 16));
+        panel.addView(text("Trilhas fixas", 16, DARK, true, Gravity.START, 0, 10));
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setWeightSum(2f);
+
+        boolean beginnerSelected = LessonRepository.BEGINNER.equals(selectedLevel);
+        TextView beginner = button("INICIANTE", beginnerSelected ? DARK : WHITE, beginnerSelected ? WHITE : DARK, 48);
+        beginner.setOnClickListener(v -> {
+            if (!beginnerSelected) {
+                chooseLevel(LessonRepository.BEGINNER);
+            }
+        });
+
+        boolean intermediateSelected = LessonRepository.INTERMEDIATE.equals(selectedLevel);
+        TextView intermediate = button("INTERMEDIARIO", intermediateSelected ? DARK : WHITE, intermediateSelected ? WHITE : DARK, 48);
+        intermediate.setOnClickListener(v -> {
+            if (!intermediateSelected) {
+                chooseLevel(LessonRepository.INTERMEDIATE);
+            }
+        });
+
+        row.addView(beginner, weightButton(0, 5));
+        row.addView(intermediate, weightButton(5, 0));
+        panel.addView(row, matchWrap(0, 0));
+        return panel;
+    }
+
     private View progressPanel(int completed, int total, int percent) {
         LinearLayout panel = column(SOFT, Gravity.TOP);
         panel.setPadding(dp(18), dp(16), dp(18), dp(16));
         panel.setBackground(roundRect(SOFT, 16));
         panel.addView(text("Seu progresso", 16, DARK, true, Gravity.START, 0, 5));
         panel.addView(text(
-                completed + " de " + total + " aulas concluÃ­das",
+                completed + " de " + total + " aulas concluídas",
                 14, TEXT, false, Gravity.START, 0, 10
         ));
         ProgressBar bar = horizontalProgress(percent);
@@ -912,7 +956,7 @@ public class MainActivity extends AppCompatActivity {
         content.setPadding(dp(24), dp(24), dp(24), dp(36));
 
         content.addView(statusPill(
-                progressStore.isCompleted(lesson.getId()) ? "CONCLUÃDA âœ“" : lesson.getLevel().toUpperCase(Locale.ROOT),
+                progressStore.isCompleted(lesson.getId()) ? "CONCLUÍDA ✓" : lesson.getLevel().toUpperCase(Locale.ROOT),
                 progressStore.isCompleted(lesson.getId()) ? PALE : CYAN
         ), wrapStart(0, 16));
         content.addView(text(lesson.getTitle(), 29, DARK, true, Gravity.START, 0, 8));
@@ -927,7 +971,7 @@ public class MainActivity extends AppCompatActivity {
             content.addView(stepCard(i + 1, steps[i]), matchWrap(0, 10));
         }
 
-        content.addView(text("PadrÃ£o do exercÃ­cio", 21, DARK, true, Gravity.START, 14, 8));
+        content.addView(text("Padrão do exercício", 21, DARK, true, Gravity.START, 14, 8));
         content.addView(infoCard(
                 lesson.getChord(),
                 "Cordas: " + patternToText(lesson.getPattern()) + "\nVelocidade sugerida: " + lesson.getBpm() + " BPM"
@@ -955,7 +999,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView completionButton(Lesson lesson) {
         boolean completed = progressStore.isCompleted(lesson.getId());
         TextView button = button(
-                completed ? "AULA CONCLUÃDA âœ“" : "MARCAR COMO CONCLUÃDA",
+                completed ? "AULA CONCLUÍDA ✓" : "MARCAR COMO CONCLUÍDA",
                 completed ? PALE : CYAN,
                 WHITE,
                 62
@@ -966,7 +1010,7 @@ public class MainActivity extends AppCompatActivity {
             syncLessonProgress(lesson.getId());
             Toast.makeText(
                     this,
-                    newState ? "Aula concluÃ­da!" : "ConclusÃ£o removida",
+                    newState ? "Aula concluída!" : "Conclusão removida",
                     Toast.LENGTH_SHORT
             ).show();
             showLessonDetail(lesson);
@@ -1007,7 +1051,7 @@ public class MainActivity extends AppCompatActivity {
         content.addView(practiceView, practiceParams);
 
         TextView status = text(
-                "Corda " + pattern[0] + " â€¢ " + fingerForString(pattern[0]),
+                "Corda " + pattern[0] + " • " + fingerForString(pattern[0]),
                 16, DARK, true, Gravity.CENTER, 0, 12
         );
         content.addView(status);
@@ -1046,7 +1090,7 @@ public class MainActivity extends AppCompatActivity {
 
         final int[] repetition = {0};
         practiceView.setOnStepListener((position, stringNumber) -> {
-            status.setText("Corda " + stringNumber + " â€¢ " + fingerForString(stringNumber));
+            status.setText("Corda " + stringNumber + " • " + fingerForString(stringNumber));
             if (position == 0 && practiceView != null && practiceView.isRunning()) {
                 repetition[0]++;
             }
@@ -1109,7 +1153,7 @@ public class MainActivity extends AppCompatActivity {
             complete.setOnClickListener(v -> {
                 progressStore.setCompleted(lesson.getId(), true);
                 syncLessonProgress(lesson.getId());
-                Toast.makeText(this, "Aula concluÃ­da!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Aula concluída!", Toast.LENGTH_SHORT).show();
                 returnFromPractice();
             });
             content.addView(complete, matchWrap(0, 0));
@@ -1139,7 +1183,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(20), dp(18), dp(20), dp(28));
         content.addView(text(song.getTitle(), 25, DARK, true, Gravity.START, 0, 4));
-        content.addView(text(song.getArtist() + "  â€¢  " + song.getDifficulty(), 15, TEAL, true, Gravity.START, 0, 10));
+        content.addView(text(song.getArtist() + "  •  " + song.getDifficulty(), 15, TEAL, true, Gravity.START, 0, 10));
         content.addView(text("BPM recomendado: " + song.getRecommendedBpm(), 15, TEXT, false, Gravity.START, 0, 10));
 
         TextView state = text("Carregando sons...", 15, DARK, true, Gravity.CENTER, 0, 8);
@@ -1198,15 +1242,15 @@ public class MainActivity extends AppCompatActivity {
         controls.setOrientation(LinearLayout.HORIZONTAL);
         controls.setGravity(Gravity.CENTER);
         controls.setWeightSum(3f);
-        TextView previous = button("âª", SOFT, DARK, 58);
-        TextView startPause = button(guitarSoundPlayer.isReady() ? "â–¶" : "Tentar novamente", DARK, WHITE, 58);
-        TextView next = button("â©", SOFT, DARK, 58);
+        TextView previous = button("⏪", SOFT, DARK, 58);
+        TextView startPause = button(guitarSoundPlayer.isReady() ? "▶" : "Tentar novamente", DARK, WHITE, 58);
+        TextView next = button("⏩", SOFT, DARK, 58);
         previous.setTextSize(24);
         startPause.setTextSize(24);
         next.setTextSize(24);
         previous.setContentDescription("Voltar para a nota anterior");
-        startPause.setContentDescription(guitarSoundPlayer.isReady() ? "Continuar mÃºsica" : "Tentar novamente");
-        next.setContentDescription("AvanÃ§ar para a prÃ³xima nota");
+        startPause.setContentDescription(guitarSoundPlayer.isReady() ? "Continuar música" : "Tentar novamente");
+        next.setContentDescription("Avançar para a próxima nota");
         controls.addView(previous, weightButton(0, 6));
         controls.addView(startPause, weightButton(6, 6));
         controls.addView(next, weightButton(6, 0));
@@ -1218,8 +1262,8 @@ public class MainActivity extends AppCompatActivity {
         startPause.postDelayed(() -> {
             if (guitarSoundPlayer != null && guitarSoundPlayer.isReady() && !practiceView.isRunning()) {
                 state.setText(guitarSoundPlayer.statusText());
-                startPause.setText("â–¶");
-                startPause.setContentDescription("Continuar mÃºsica");
+                startPause.setText("▶");
+                startPause.setContentDescription("Continuar música");
             }
         }, 900L);
 
@@ -1300,8 +1344,8 @@ public class MainActivity extends AppCompatActivity {
                 if (guitarSoundPlayer != null) {
                     guitarSoundPlayer.stopAll();
                 }
-                startPause.setText("â–¶");
-                startPause.setContentDescription("Continuar mÃºsica");
+                startPause.setText("▶");
+                startPause.setContentDescription("Continuar música");
                 state.setText("Finalizado");
                 updatePracticeProgress(progress);
                 updateNavigationButtons(previous, next);
@@ -1316,8 +1360,8 @@ public class MainActivity extends AppCompatActivity {
                     guitarSoundPlayer.stopAll();
                 }
                 state.setText("Pausado");
-                startPause.setText("â–¶");
-                startPause.setContentDescription("Continuar mÃºsica");
+                startPause.setText("▶");
+                startPause.setContentDescription("Continuar música");
             } else {
                 if (guitarSoundPlayer == null || !guitarSoundPlayer.isReady()) {
                     state.setText(guitarSoundPlayer == null ? "Erro" : guitarSoundPlayer.statusText());
@@ -1328,8 +1372,8 @@ public class MainActivity extends AppCompatActivity {
                 }
                 practiceView.start();
                 state.setText("Reproduzindo");
-                startPause.setText("â¸");
-                startPause.setContentDescription("Pausar mÃºsica");
+                startPause.setText("⏸");
+                startPause.setContentDescription("Pausar música");
             }
         });
         previous.setOnClickListener(v -> {
@@ -1339,8 +1383,8 @@ public class MainActivity extends AppCompatActivity {
             practiceView.moveToPreviousEvent();
             lastPlayedPosition[0] = -1;
             state.setText("Pausado");
-            startPause.setText("â–¶");
-            startPause.setContentDescription("Continuar mÃºsica");
+            startPause.setText("▶");
+            startPause.setContentDescription("Continuar música");
             updatePracticeProgress(progress);
             updateNavigationButtons(previous, next);
         });
@@ -1351,8 +1395,8 @@ public class MainActivity extends AppCompatActivity {
             practiceView.moveToNextEvent();
             lastPlayedPosition[0] = -1;
             state.setText("Pausado");
-            startPause.setText("â–¶");
-            startPause.setContentDescription("Continuar mÃºsica");
+            startPause.setText("▶");
+            startPause.setContentDescription("Continuar música");
             updatePracticeProgress(progress);
             updateNavigationButtons(previous, next);
         });
@@ -1365,9 +1409,9 @@ public class MainActivity extends AppCompatActivity {
             updatePracticeProgress(progress);
             updateNavigationButtons(previous, next);
             state.setText(guitarSoundPlayer == null ? "Erro" : guitarSoundPlayer.statusText());
-            startPause.setText(guitarSoundPlayer != null && guitarSoundPlayer.isReady() ? "â–¶" : "Tentar novamente");
+            startPause.setText(guitarSoundPlayer != null && guitarSoundPlayer.isReady() ? "▶" : "Tentar novamente");
             startPause.setContentDescription(guitarSoundPlayer != null && guitarSoundPlayer.isReady()
-                    ? "Continuar mÃºsica"
+                    ? "Continuar música"
                     : "Tentar novamente");
         });
 
@@ -1406,7 +1450,7 @@ public class MainActivity extends AppCompatActivity {
         content.setPadding(dp(24), dp(24), dp(24), dp(32));
         content.addView(text("Biblioteca de arpejos", 28, DARK, true, Gravity.START, 0, 7));
         content.addView(text(
-                "Escolha um acorde e pratique o padrÃ£o Pâ€“Iâ€“Mâ€“A.",
+                "Escolha um acorde e pratique o padrão P–I–M–A.",
                 15, TEXT, false, Gravity.START, 0, 22
         ));
 
@@ -1650,26 +1694,35 @@ public class MainActivity extends AppCompatActivity {
         root.removeAllViews();
 
         LinearLayout shell = column(TEAL, Gravity.TOP);
-        shell.addView(pageHeader("RepertÃ³rio", () -> showCourse(level)),
+        shell.addView(pageHeader("Repertório", () -> showCourse(level)),
                 new LinearLayout.LayoutParams(-1, dp(72)));
 
         LinearLayout content = column(TEAL, Gravity.TOP);
         content.setPadding(dp(18), dp(18), dp(18), dp(24));
-        EditText search = input("", "Pesquise uma prÃ¡tica");
+        EditText search = input("", "Pesquise uma prática");
         search.setCompoundDrawablesWithIntrinsicBounds(0, 0, android.R.drawable.ic_menu_search, 0);
         content.addView(search, matchWrap(0, 16));
         content.addView(text(
-                "Recomendadas para vocÃª, " + firstName() + "!",
+                "Recomendadas para você, " + firstName() + "!",
                 17, WHITE, true, Gravity.START, 0, 12
         ));
 
         ScrollView resultsScroll = new ScrollView(this);
         LinearLayout results = column(TEAL, Gravity.TOP);
-        renderSongs(results, "");
+        final List<Song> currentSongs = new ArrayList<>(songRepository.publishedQueued());
+        renderSongs(results, "", currentSongs);
         resultsScroll.addView(results);
         content.addView(resultsScroll, new LinearLayout.LayoutParams(-1, 0, 1));
         shell.addView(content, new LinearLayout.LayoutParams(-1, 0, 1));
         root.addView(shell, matchMatch());
+
+        songRepository.fetchPublishedQueued((songs, fromNetwork) -> {
+            if (screen == Screen.SONGS) {
+                currentSongs.clear();
+                currentSongs.addAll(songs);
+                renderSongs(results, search.getText().toString(), currentSongs);
+            }
+        });
 
         search.addTextChangedListener(new TextWatcher() {
             @Override
@@ -1678,7 +1731,7 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
-                renderSongs(results, s.toString());
+                renderSongs(results, s.toString(), currentSongs);
             }
 
             @Override
@@ -1688,69 +1741,29 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void renderSongs(LinearLayout results, String query) {
+        renderSongs(results, query, songRepository.publishedQueued());
+    }
+
+    private void renderSongs(LinearLayout results, String query, List<Song> songs) {
         results.removeAllViews();
         String normalized = query.trim().toLowerCase(Locale.ROOT);
-        boolean useLocalSongs = true;
-        if (useLocalSongs) {
-            int shown = 0;
-            for (Song song : songRepository.publishedQueued()) {
-                if (!normalized.isEmpty() && !song.getTitle().toLowerCase(Locale.ROOT).contains(normalized)) {
-                    continue;
-                }
-                TextView card = songCard(
-                        song.getTitle(),
-                        song.getDifficulty(),
-                        song.getArtist() + "  â€¢  " + song.getRecommendedBpm() + " BPM recomendado"
-                );
-                card.setOnClickListener(v -> showSongPractice(song));
-                results.addView(card, matchWrap(0, 10));
-                shown++;
-            }
-            if (shown == 0) {
-                results.addView(text(
-                        "Nenhuma musica publicada encontrada.",
-                        16, WHITE, true, Gravity.CENTER, 28, 0
-                ));
-            }
-            return;
-        }
-        String[] titles = {
-                "Asa Branca â€“ estudo de progressÃ£o",
-                "Romance AnÃ´nimo â€“ estudo lento",
-                "Estudo em DÃ³ â€“ arpejo bÃ¡sico",
-                "Valsa de prÃ¡tica â€“ compasso ternÃ¡rio",
-                "ExercÃ­cio em Sol â€“ baixos alternados"
-        };
-        String[] levels = {"Iniciante", "IntermediÃ¡rio", "Iniciante", "IntermediÃ¡rio", "IntermediÃ¡rio"};
-        String[] chords = {"C â€“ F â€“ G", "Am â€“ E", "C", "Am â€“ Dm â€“ E", "G â€“ C â€“ D"};
-        int[][] patterns = {
-                {5, 3, 2, 1, 2, 3},
-                {5, 3, 2, 1, 2, 3},
-                {5, 3, 2, 1},
-                {5, 3, 1, 2, 3, 2},
-                {6, 3, 2, 1, 5, 3, 2, 1}
-        };
-        int[] bpms = {58, 62, 56, 72, 70};
         int shown = 0;
-
-        for (int i = 0; i < titles.length; i++) {
-            if (!normalized.isEmpty() && !titles[i].toLowerCase(Locale.ROOT).contains(normalized)) {
+        for (Song song : songs) {
+            if (!normalized.isEmpty() && !song.getTitle().toLowerCase(Locale.ROOT).contains(normalized)) {
                 continue;
             }
-            final String title = titles[i];
-            final String chord = chords[i];
-            final int[] pattern = patterns[i];
-            final int bpm = bpms[i];
-            TextView card = songCard(title, levels[i], chord);
-            card.setOnClickListener(v -> showPractice(
-                    title, chord, pattern, bpm, null, Screen.SONGS
-            ));
+            TextView card = songCard(
+                    song.getTitle(),
+                    song.getDifficulty(),
+                    song.getArtist() + "  •  " + song.getRecommendedBpm() + " BPM recomendado"
+            );
+            card.setOnClickListener(v -> showSongPractice(song));
             results.addView(card, matchWrap(0, 10));
             shown++;
         }
         if (shown == 0) {
             results.addView(text(
-                    "Nenhuma prÃ¡tica encontrada.",
+                    "Nenhuma música publicada encontrada.",
                     16, WHITE, true, Gravity.CENTER, 28, 0
             ));
         }
@@ -1775,7 +1788,7 @@ public class MainActivity extends AppCompatActivity {
         content.setPadding(dp(24), dp(28), dp(24), dp(32));
         content.addView(text("PAINEL ADMINISTRATIVO", 25, DARK, true, Gravity.START, 0, 20));
 
-        TextView songs = button("Gerenciar mÃºsicas", DARK, WHITE, 58);
+        TextView songs = button("Gerenciar músicas", DARK, WHITE, 58);
         songs.setOnClickListener(v -> showAdminSongs());
         content.addView(songs, matchWrap(0, 12));
 
@@ -1783,7 +1796,7 @@ public class MainActivity extends AppCompatActivity {
         arpeggios.setOnClickListener(v -> showAdminArpeggios());
         content.addView(arpeggios, matchWrap(0, 12));
 
-        TextView trivia = button("Gerenciar mÃ³dulos/conteÃºdo", DARK, WHITE, 58);
+        TextView trivia = button("Gerenciar módulos/conteúdo", DARK, WHITE, 58);
         trivia.setOnClickListener(v -> showAdminModules());
         content.addView(trivia, matchWrap(0, 12));
 
@@ -1791,7 +1804,7 @@ public class MainActivity extends AppCompatActivity {
         student.setOnClickListener(v -> showCourse(level));
         content.addView(student, matchWrap(0, 12));
 
-        TextView settings = button("ConfiguraÃ§Ãµes", SOFT, DARK, 54);
+        TextView settings = button("Configurações", SOFT, DARK, 54);
         settings.setOnClickListener(v -> showSettings());
         content.addView(settings, matchWrap(0, 0));
 
@@ -1818,20 +1831,11 @@ public class MainActivity extends AppCompatActivity {
         content.setPadding(dp(24), dp(28), dp(24), dp(32));
         content.addView(text("PAINEL CONFIGURADOR", 25, DARK, true, Gravity.START, 0, 20));
 
-        TextView modules = button("Gerenciar mÃ³dulos", DARK, WHITE, 58);
-        modules.setOnClickListener(v -> showModuleManagement());
-        content.addView(modules, matchWrap(0, 12));
-
-        TextView users = button("Gerenciar usuÃ¡rios", DARK, WHITE, 58);
+        TextView users = button("Gerenciar usuários", DARK, WHITE, 58);
         users.setOnClickListener(v -> showUserManagement());
         content.addView(users, matchWrap(0, 12));
 
-        TextView createUser = button("Criar usuÃ¡rio", DARK, WHITE, 58);
-        createUser.setOnClickListener(v -> showCreateManagedUser());
-        content.addView(createUser, matchWrap(0, 12));
-
-
-        TextView settings = button("ConfiguraÃ§Ãµes", SOFT, DARK, 54);
+        TextView settings = button("Configurações", SOFT, DARK, 54);
         settings.setOnClickListener(v -> showSettings());
         content.addView(settings, matchWrap(0, 0));
 
@@ -1842,7 +1846,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void showAdminModules() {
         stopPractice();
-        if (!isStaff()) {
+        if (!isAdmin()) {
             showCourse(level);
             return;
         }
@@ -1850,12 +1854,12 @@ public class MainActivity extends AppCompatActivity {
         root.removeAllViews();
 
         LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(pageHeader("Gerenciar mÃ³dulos/conteÃºdo", isConfigurator() ? this::showConfiguratorDashboard : this::showAdminDashboard),
+        shell.addView(pageHeader("Gerenciar módulos/conteúdo", this::showAdminDashboard),
                 new LinearLayout.LayoutParams(-1, dp(72)));
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(24), dp(24), dp(24), dp(32));
-        content.addView(text("MÃ³dulos existentes", 24, DARK, true, Gravity.START, 0, 16));
+        content.addView(text("Módulos existentes", 24, DARK, true, Gravity.START, 0, 16));
         LinearLayout list = column(WHITE, Gravity.TOP);
         content.addView(list, matchWrap(0, 0));
         scroll.addView(content);
@@ -1880,27 +1884,60 @@ public class MainActivity extends AppCompatActivity {
 
     private void renderAdminModules(LinearLayout list, List<LearningModuleResponse> modules) {
         list.removeAllViews();
-        if (modules == null || modules.isEmpty()) {
-            list.addView(text("Nenhum mÃ³dulo encontrado.", 16, TEXT, false, Gravity.START, 0, 0));
+        List<LearningModuleResponse> fixedModules = fixedTriviaModules(modules);
+        if (fixedModules.isEmpty()) {
+            list.addView(text("Nenhum módulo encontrado.", 16, TEXT, false, Gravity.START, 0, 0));
             return;
         }
-        for (LearningModuleResponse module : modules) {
+        for (LearningModuleResponse module : fixedModules) {
             LinearLayout card = column(SOFT, Gravity.TOP);
             card.setPadding(dp(16), dp(14), dp(16), dp(16));
             card.setBackground(roundRect(SOFT, 14));
             card.addView(text(module.name, 18, DARK, true, Gravity.START, 0, 8));
             card.addView(text("Tipo: " + module.moduleType + "\nOrdem: " + module.sortOrder + "\nStatus: " + (module.active ? "ativo" : "inativo"),
                     14, TEXT, false, Gravity.START, 0, 12));
-            TextView open = button("Abrir conteÃºdo", DARK, WHITE, 48);
+            TextView open = button("Abrir conteúdo", DARK, WHITE, 48);
             open.setOnClickListener(v -> showAdminModuleItems(module));
             card.addView(open, matchWrap(0, 0));
             list.addView(card, matchWrap(0, 12));
         }
     }
 
+    private List<LearningModuleResponse> fixedTriviaModules(List<LearningModuleResponse> modules) {
+        List<LearningModuleResponse> result = new ArrayList<>();
+        LearningModuleResponse beginner = null;
+        LearningModuleResponse intermediate = null;
+        if (modules != null) {
+            for (LearningModuleResponse module : modules) {
+                if (module == null) {
+                    continue;
+                }
+                if (MODULE_TRIVIA_BEGINNER.equals(module.id)) {
+                    beginner = module;
+                } else if (MODULE_TRIVIA_INTERMEDIATE.equals(module.id)) {
+                    intermediate = module;
+                }
+            }
+        }
+        result.add(beginner == null ? fixedTriviaModule(MODULE_TRIVIA_BEGINNER, "Trivia Iniciante", 1) : beginner);
+        result.add(intermediate == null ? fixedTriviaModule(MODULE_TRIVIA_INTERMEDIATE, "Trivia Intermediario", 2) : intermediate);
+        return result;
+    }
+
+    private LearningModuleResponse fixedTriviaModule(String id, String name, int sortOrder) {
+        LearningModuleResponse module = new LearningModuleResponse();
+        module.id = id;
+        module.name = name;
+        module.moduleType = "trivia";
+        module.description = "";
+        module.sortOrder = sortOrder;
+        module.active = true;
+        return module;
+    }
+
     private void showAdminModuleItems(LearningModuleResponse module) {
         stopPractice();
-        if (!isStaff()) {
+        if (!isAdmin()) {
             showCourse(level);
             return;
         }
@@ -1908,7 +1945,7 @@ public class MainActivity extends AppCompatActivity {
         root.removeAllViews();
 
         LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(pageHeader(module.name == null ? "MÃ³dulo" : module.name, this::showAdminModules),
+        shell.addView(pageHeader(module.name == null ? "Módulo" : module.name, this::showAdminModules),
                 new LinearLayout.LayoutParams(-1, dp(72)));
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
@@ -1916,7 +1953,7 @@ public class MainActivity extends AppCompatActivity {
         TextView addQuestion = button("+ pergunta", DARK, WHITE, 52);
         addQuestion.setOnClickListener(v -> showModuleMultipleChoiceEditor(module, null));
         content.addView(addQuestion, matchWrap(0, 10));
-        TextView addSong = button("+ mÃºsica", SOFT, DARK, 52);
+        TextView addSong = button("+ música", SOFT, DARK, 52);
         addSong.setOnClickListener(v -> showModuleSongItemEditor(module, null));
         content.addView(addSong, matchWrap(0, 14));
 
@@ -1931,7 +1968,7 @@ public class MainActivity extends AppCompatActivity {
     private void renderAdminModuleItems(LinearLayout list, LearningModuleResponse module) {
         list.removeAllViews();
         if (module.items == null || module.items.isEmpty()) {
-            list.addView(text("Nenhum item cadastrado neste mÃ³dulo.", 16, TEXT, false, Gravity.START, 0, 0));
+            list.addView(text("Nenhum item cadastrado neste módulo.", 16, TEXT, false, Gravity.START, 0, 0));
             return;
         }
         for (LearningModuleItemResponse item : module.items) {
@@ -1939,7 +1976,7 @@ public class MainActivity extends AppCompatActivity {
             card.setPadding(dp(14), dp(12), dp(14), dp(14));
             card.setBackground(roundRect(SOFT, 14));
             String title = item.title == null || item.title.trim().isEmpty()
-                    ? ("song".equals(item.itemType) ? "MÃºsica" : "Pergunta")
+                    ? ("song".equals(item.itemType) ? "Música" : "Pergunta")
                     : item.title;
             card.addView(text(title, 17, DARK, true, Gravity.START, 0, 6));
             card.addView(text("Tipo: " + item.itemType + "\nOrdem: " + item.sortOrder + "\nStatus: " + (item.active ? "ativo" : "inativo"),
@@ -1970,7 +2007,7 @@ public class MainActivity extends AppCompatActivity {
     private void confirmDeactivateModuleItem(LearningModuleResponse module, LearningModuleItemResponse item) {
         new AlertDialog.Builder(this)
                 .setTitle("Desativar item?")
-                .setMessage("O item deixarÃ¡ de aparecer para os alunos.")
+                .setMessage("O item deixará de aparecer para os alunos.")
                 .setNegativeButton("Cancelar", null)
                 .setPositiveButton("Desativar", (dialog, which) -> saveModuleItem(module, item, false))
                 .show();
@@ -2001,7 +2038,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showModuleMultipleChoiceEditor(LearningModuleResponse module, LearningModuleItemResponse existing) {
-        if (!isStaff()) {
+        if (!isAdmin()) {
             showCourse(level);
             return;
         }
@@ -2019,8 +2056,8 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(18), dp(18), dp(18), dp(28));
 
-        EditText title = input(editing ? safeText(existing.title) : "", "TÃ­tulo do item");
-        EditText instructions = input(editing ? safeText(existing.instructions) : "", "InstruÃ§Ãµes");
+        EditText title = input(editing ? safeText(existing.title) : "", "Título do item");
+        EditText instructions = input(editing ? safeText(existing.instructions) : "", "Instruções");
         EditText question = input(editing && existing.multipleChoice != null ? safeText(existing.multipleChoice.question) : "", "Pergunta");
         EditText optionA = input(optionAt(existingOptions, 0), "Alternativa A");
         EditText optionB = input(optionAt(existingOptions, 1), "Alternativa B");
@@ -2030,7 +2067,7 @@ public class MainActivity extends AppCompatActivity {
         if (editing && existing.multipleChoice != null) {
             correct.setSelection(Math.max(0, Math.min(3, existing.multipleChoice.correctIndex)));
         }
-        EditText explanation = input(editing && existing.multipleChoice != null ? safeText(existing.multipleChoice.explanation) : "", "ExplicaÃ§Ã£o opcional");
+        EditText explanation = input(editing && existing.multipleChoice != null ? safeText(existing.multipleChoice.explanation) : "", "Explicação opcional");
         EditText sortOrder = input(editing ? String.valueOf(existing.sortOrder) : "", "Ordem");
         sortOrder.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
 
@@ -2056,7 +2093,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showModuleSongItemEditor(LearningModuleResponse module, LearningModuleItemResponse existing) {
-        if (!isStaff()) {
+        if (!isAdmin()) {
             showCourse(level);
             return;
         }
@@ -2064,14 +2101,14 @@ public class MainActivity extends AppCompatActivity {
         root.removeAllViews();
         boolean editing = existing != null;
         LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(pageHeader(editing ? "Editar mÃºsica do mÃ³dulo" : "Nova mÃºsica no mÃ³dulo", () -> showAdminModuleItems(module)),
+        shell.addView(pageHeader(editing ? "Editar música do módulo" : "Nova música no módulo", () -> showAdminModuleItems(module)),
                 new LinearLayout.LayoutParams(-1, dp(72)));
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(18), dp(18), dp(18), dp(28));
-        EditText title = input(editing ? safeText(existing.title) : "", "TÃ­tulo do item");
-        EditText songId = input(editing ? safeText(existing.songId) : "", "ID da mÃºsica");
-        EditText instructions = input(editing ? safeText(existing.instructions) : "", "InstruÃ§Ãµes");
+        EditText title = input(editing ? safeText(existing.title) : "", "Título do item");
+        EditText songId = input(editing ? safeText(existing.songId) : "", "ID da música");
+        EditText instructions = input(editing ? safeText(existing.instructions) : "", "Instruções");
         EditText sortOrder = input(editing ? String.valueOf(existing.sortOrder) : "", "Ordem");
         sortOrder.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         content.addView(title, matchWrap(0, 10));
@@ -2139,7 +2176,7 @@ public class MainActivity extends AppCompatActivity {
             boolean active
     ) {
         if (songId.getText().toString().trim().isEmpty()) {
-            songId.setError("Informe o ID da mÃºsica.");
+            songId.setError("Informe o ID da música.");
             return;
         }
         LearningModuleItemRequest request = new LearningModuleItemRequest(
@@ -2191,7 +2228,7 @@ public class MainActivity extends AppCompatActivity {
         call.enqueue(new Callback<LearningModuleItemResponse>() {
             @Override
             public void onResponse(Call<LearningModuleItemResponse> call, Response<LearningModuleItemResponse> response) {
-                Toast.makeText(MainActivity.this, response.isSuccessful() ? "Item salvo" : "NÃ£o foi possÃ­vel salvar", Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, response.isSuccessful() ? "Item salvo" : "Não foi possível salvar", Toast.LENGTH_SHORT).show();
                 if (response.isSuccessful()) {
                     reloadAdminModule(module.id);
                 }
@@ -2199,7 +2236,7 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onFailure(Call<LearningModuleItemResponse> call, Throwable t) {
-                Toast.makeText(MainActivity.this, "Falha de conexÃ£o", Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, "Falha de conexão", Toast.LENGTH_SHORT).show();
             }
         });
     }
@@ -2252,14 +2289,14 @@ public class MainActivity extends AppCompatActivity {
         root.removeAllViews();
 
         LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(pageHeader("Gerenciar mÃºsicas", this::showAdminDashboard),
+        shell.addView(pageHeader("Gerenciar músicas", this::showAdminDashboard),
                 new LinearLayout.LayoutParams(-1, dp(72)));
 
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(18), dp(18), dp(18), dp(24));
-        TextView newSong = button("NOVA MÃšSICA", DARK, WHITE, 56);
+        TextView newSong = button("NOVA MÚSICA", DARK, WHITE, 56);
         content.addView(newSong, matchWrap(0, 12));
-        EditText search = input("", "Pesquisar por tÃ­tulo");
+        EditText search = input("", "Pesquisar por título");
         content.addView(search, matchWrap(0, 12));
 
         LinearLayout filters = new LinearLayout(this);
@@ -2276,24 +2313,33 @@ public class MainActivity extends AppCompatActivity {
         ScrollView scroll = new ScrollView(this);
         LinearLayout results = column(WHITE, Gravity.TOP);
         final String[] statusFilter = {""};
-        renderAdminSongs(results, "", statusFilter[0]);
+        final List<Song> currentSongs = new ArrayList<>(songRepository.all());
+        renderAdminSongs(results, "", statusFilter[0], currentSongs);
         scroll.addView(results);
         content.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         shell.addView(content, new LinearLayout.LayoutParams(-1, 0, 1));
         root.addView(shell, matchMatch());
 
+        songRepository.fetchAdmin((songs, fromNetwork) -> {
+            if (screen == Screen.ADMIN_SONGS) {
+                currentSongs.clear();
+                currentSongs.addAll(songs);
+                renderAdminSongs(results, search.getText().toString(), statusFilter[0], currentSongs);
+            }
+        });
+
         newSong.setOnClickListener(v -> showSongEditor(null));
         all.setOnClickListener(v -> {
             statusFilter[0] = "";
-            renderAdminSongs(results, search.getText().toString(), statusFilter[0]);
+            renderAdminSongs(results, search.getText().toString(), statusFilter[0], currentSongs);
         });
         published.setOnClickListener(v -> {
             statusFilter[0] = Song.PUBLISHED;
-            renderAdminSongs(results, search.getText().toString(), statusFilter[0]);
+            renderAdminSongs(results, search.getText().toString(), statusFilter[0], currentSongs);
         });
         drafts.setOnClickListener(v -> {
             statusFilter[0] = Song.DRAFT;
-            renderAdminSongs(results, search.getText().toString(), statusFilter[0]);
+            renderAdminSongs(results, search.getText().toString(), statusFilter[0], currentSongs);
         });
         search.addTextChangedListener(new TextWatcher() {
             @Override
@@ -2302,7 +2348,7 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
-                renderAdminSongs(results, s.toString(), statusFilter[0]);
+                renderAdminSongs(results, s.toString(), statusFilter[0], currentSongs);
             }
 
             @Override
@@ -2312,9 +2358,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void renderAdminSongs(LinearLayout results, String query, String statusFilter) {
+        renderAdminSongs(results, query, statusFilter, songRepository.all());
+    }
+
+    private void renderAdminSongs(LinearLayout results, String query, String statusFilter, List<Song> songs) {
         results.removeAllViews();
         String normalized = query.trim().toLowerCase(Locale.ROOT);
-        for (Song song : songRepository.all()) {
+        int shown = 0;
+        for (Song song : songs) {
             if (!normalized.isEmpty() && !song.getTitle().toLowerCase(Locale.ROOT).contains(normalized)) {
                 continue;
             }
@@ -2329,11 +2380,11 @@ public class MainActivity extends AppCompatActivity {
                     17, DARK, true, Gravity.START, 0, 6
             ));
             card.addView(text(
-                    song.getArtist() + " â€¢ " + song.getDifficulty() + " â€¢ " + song.getRecommendedBpm() + " BPM",
+                    song.getArtist() + " • " + song.getDifficulty() + " • " + song.getRecommendedBpm() + " BPM",
                     14, TEXT, false, Gravity.START, 0, 7
             ));
             card.addView(text(
-                    song.getStatus() + (song.isInQueue() ? " â€¢ na fila" : " â€¢ fora da fila"),
+                    song.getStatus() + (song.isInQueue() ? " • na fila" : " • fora da fila"),
                     13, TEAL, true, Gravity.START, 0, 10
             ));
 
@@ -2348,13 +2399,16 @@ public class MainActivity extends AppCompatActivity {
 
             LinearLayout row2 = new LinearLayout(this);
             row2.setOrientation(LinearLayout.HORIZONTAL);
-            row2.setWeightSum(3f);
+            row2.setWeightSum(4f);
             TextView up = button("SUBIR", SOFT, DARK, 42);
             TextView down = button("DESCER", SOFT, DARK, 42);
             TextView queue = button(song.isInQueue() ? "REMOVER FILA" : "ADICIONAR FILA", SOFT, DARK, 42);
+            queue.setTextSize(12);
             row2.addView(up, weightButton(0, 4));
             row2.addView(down, weightButton(4, 4));
-            row2.addView(queue, weightButton(4, 0));
+            LinearLayout.LayoutParams queueParams = new LinearLayout.LayoutParams(0, dp(42), 2f);
+            queueParams.setMargins(dp(4), 0, 0, 0);
+            row2.addView(queue, queueParams);
             card.addView(row2, matchWrap(0, 8));
 
             LinearLayout row3 = new LinearLayout(this);
@@ -2373,7 +2427,7 @@ public class MainActivity extends AppCompatActivity {
                     songRepository.save(song.withStatus(Song.PUBLISHED.equals(song.getStatus()) ? Song.DRAFT : Song.PUBLISHED));
                     showAdminSongs();
                 } catch (IllegalArgumentException ex) {
-                    Toast.makeText(this, ex.getMessage(), Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, friendlyTablatureError(), Toast.LENGTH_LONG).show();
                 }
             });
             up.setOnClickListener(v -> {
@@ -2394,12 +2448,16 @@ public class MainActivity extends AppCompatActivity {
             });
             delete.setOnClickListener(v -> confirmDeleteSong(song));
             results.addView(card, matchWrap(0, 12));
+            shown++;
+        }
+        if (shown == 0) {
+            results.addView(text("Nenhuma musica encontrada.", 16, TEXT, false, Gravity.CENTER, 24, 0));
         }
     }
 
     private void confirmDeleteSong(Song song) {
         new AlertDialog.Builder(this)
-                .setTitle("Excluir mÃºsica")
+                .setTitle("Excluir música")
                 .setMessage("Deseja excluir definitivamente \"" + song.getTitle() + "\"?")
                 .setPositiveButton("Excluir", (dialog, which) -> {
                     songRepository.delete(song.getId());
@@ -2439,7 +2497,7 @@ public class MainActivity extends AppCompatActivity {
         if (arpeggioRepository != null) {
             arpeggioRepository.fetchAdmin((items, fromNetwork) -> {
                 if (screen == Screen.ADMIN_ARPEGGIOS) {
-                    renderAdminArpeggios(results, items);
+                    renderAdminArpeggios(results, items == null || items.isEmpty() ? fallbackArpeggios() : items);
                 }
             });
         }
@@ -2455,8 +2513,8 @@ public class MainActivity extends AppCompatActivity {
             LinearLayout card = column(SOFT, Gravity.TOP);
             card.setPadding(dp(14), dp(12), dp(14), dp(14));
             card.setBackground(roundRect(SOFT, 14));
-            card.addView(text(item.title + (item.chord == null || item.chord.trim().isEmpty() ? "" : " â€¢ " + item.chord), 17, DARK, true, Gravity.START, 0, 6));
-            card.addView(text(Song.difficultyLabel(item.difficulty) + (item.active ? " â€¢ ativo" : " â€¢ inativo"), 14, TEXT, false, Gravity.START, 0, 10));
+            card.addView(text(item.title + (item.chord == null || item.chord.trim().isEmpty() ? "" : " • " + item.chord), 17, DARK, true, Gravity.START, 0, 6));
+            card.addView(text(Song.difficultyLabel(item.difficulty) + (item.active ? " • ativo" : " • inativo"), 14, TEXT, false, Gravity.START, 0, 10));
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setWeightSum(2f);
@@ -2472,14 +2530,21 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void confirmDeleteArpeggio(ArpeggioResponse arpeggio) {
+        if (arpeggio == null || arpeggio.id == null || arpeggio.id.trim().isEmpty()) {
+            Toast.makeText(this, "Arpejo invalido para exclusao", Toast.LENGTH_SHORT).show();
+            return;
+        }
         new AlertDialog.Builder(this)
-                .setTitle("Excluir este arpejo?")
+                .setTitle("Excluir arpejo \"" + safeText(arpeggio.title) + "\"?")
+                .setMessage("Esta acao nao pode ser desfeita.")
                 .setNegativeButton("Cancelar", null)
                 .setPositiveButton("Excluir", (dialog, which) -> {
                     if (arpeggioRepository != null) {
                         arpeggioRepository.delete(arpeggio.id, (success, code) -> {
-                            Toast.makeText(this, success ? "Arpejo excluÃ­do" : "NÃ£o foi possÃ­vel excluir", Toast.LENGTH_SHORT).show();
-                            showAdminArpeggios();
+                            Toast.makeText(this, success ? "Arpejo excluído" : "Não foi possível excluir", Toast.LENGTH_SHORT).show();
+                            if (success) {
+                                showAdminArpeggios();
+                            }
                         });
                     }
                 })
@@ -2536,7 +2601,7 @@ public class MainActivity extends AppCompatActivity {
                 row.addView(remove, new LinearLayout.LayoutParams(0, dp(46), 1f));
                 notesBox.addView(row, matchWrap(0, 8));
             }
-            preview.setText(notes.isEmpty() ? "PrÃ©via indisponÃ­vel." : tablatureFromNotes(notesToMatrix(notes)));
+            preview.setText(notes.isEmpty() ? "Prévia indisponível." : tablatureFromNotes(notesToMatrix(notes)));
         };
 
         EditText stringInput = input("", "Corda 1..6");
@@ -2588,7 +2653,7 @@ public class MainActivity extends AppCompatActivity {
         }
         ArpeggioRequest request = new ArpeggioRequest(existing == null ? null : existing.id, titleValue, chord.getText().toString().trim(), notes, selectedDifficulty(difficulty), active, existing == null ? 0 : existing.sortOrder);
         arpeggioRepository.save(existing, request, (success, code) -> {
-            Toast.makeText(this, success ? "Arpejo salvo" : "NÃ£o foi possÃ­vel salvar", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, success ? "Arpejo salvo" : "Não foi possível salvar", Toast.LENGTH_SHORT).show();
             if (success) {
                 showAdminArpeggios();
             }
@@ -2614,13 +2679,13 @@ public class MainActivity extends AppCompatActivity {
         boolean editing = song != null;
 
         LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(pageHeader(editing ? "Editar mÃºsica" : "Nova mÃºsica", this::showAdminSongs),
+        shell.addView(pageHeader(editing ? "Editar música" : "Nova música", this::showAdminSongs),
                 new LinearLayout.LayoutParams(-1, dp(72)));
 
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(18), dp(18), dp(18), dp(28));
-        EditText title = input(editing ? song.getTitle() : "", "TÃ­tulo");
+        EditText title = input(editing ? song.getTitle() : "", "Título");
         EditText artist = input(editing ? song.getArtist() : "", "Artista ou autor");
         Spinner difficulty = difficultySpinner(editing ? song.normalizedDifficulty() : Song.EASY);
         EditText bpm = input(editing ? String.valueOf(song.getRecommendedBpm()) : "", "BPM recomendado");
@@ -2640,13 +2705,13 @@ public class MainActivity extends AppCompatActivity {
         content.addView(bpm, matchWrap(0, 10));
         content.addView(tablature, matchWrap(0, 12));
 
-        TextView preview = text("PrÃ©via ainda nÃ£o gerada", 13, TEXT, false, Gravity.START, 0, 10);
+        TextView preview = text("Prévia ainda não gerada", 13, TEXT, false, Gravity.START, 0, 10);
         preview.setTypeface(Typeface.MONOSPACE);
         HorizontalScrollView previewScroll = new HorizontalScrollView(this);
         previewScroll.addView(preview);
         content.addView(previewScroll, matchWrap(0, 12));
 
-        TextView previewButton = button("Visualizar interpretaÃ§Ã£o", SOFT, DARK, 52);
+        TextView previewButton = button("Visualizar interpretação", SOFT, DARK, 52);
         TextView saveDraft = button("SALVAR RASCUNHO", PALE, DARK, 52);
         TextView publish = button("PUBLICAR", DARK, WHITE, 56);
         content.addView(previewButton, matchWrap(0, 10));
@@ -2690,8 +2755,12 @@ public class MainActivity extends AppCompatActivity {
             }
             preview.setText(builder.toString());
         } catch (IllegalArgumentException ex) {
-            preview.setText("Erro: " + ex.getMessage());
+            preview.setText(friendlyTablatureError());
         }
+    }
+
+    private String friendlyTablatureError() {
+        return "A tablatura nao esta em um formato valido. Verifique se as linhas utilizam | para delimitar as cordas.";
     }
 
     private void saveSongFromEditor(
@@ -2706,7 +2775,7 @@ public class MainActivity extends AppCompatActivity {
         String titleValue = title.getText().toString().trim();
         int bpm = parseBpmOrZero(bpmInput);
         if (titleValue.isEmpty()) {
-            title.setError("Informe o tÃ­tulo.");
+            title.setError("Informe o título.");
             return;
         }
         if (bpm <= 0) {
@@ -2717,7 +2786,10 @@ public class MainActivity extends AppCompatActivity {
             try {
                 TablatureParser.parse(tablature.getText().toString(), bpm, TablatureParser.DEFAULT_COLUMNS_PER_BEAT);
             } catch (IllegalArgumentException ex) {
-                Toast.makeText(this, ex.getMessage(), Toast.LENGTH_LONG).show();
+                String message = friendlyTablatureError();
+                tablature.setError(message);
+                tablature.requestFocus();
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show();
                 return;
             }
         }
@@ -2764,7 +2836,7 @@ public class MainActivity extends AppCompatActivity {
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(24), dp(24), dp(24), dp(32));
-        content.addView(text("Sua evoluÃ§Ã£o", 29, DARK, true, Gravity.START, 0, 7));
+        content.addView(text("Sua evolução", 29, DARK, true, Gravity.START, 0, 7));
         content.addView(text(
                 "O progresso fica salvo neste aparelho e funciona sem internet.",
                 15, TEXT, false, Gravity.START, 0, 24
@@ -2773,13 +2845,13 @@ public class MainActivity extends AppCompatActivity {
         addLevelProgress(content, LessonRepository.BEGINNER);
         addLevelProgress(content, LessonRepository.INTERMEDIATE);
 
-        content.addView(text("Aulas concluÃ­das", 21, DARK, true, Gravity.START, 12, 10));
+        content.addView(text("Aulas concluídas", 21, DARK, true, Gravity.START, 12, 10));
         boolean anyCompleted = false;
         for (Lesson lesson : LessonRepository.getAll()) {
             if (progressStore.isCompleted(lesson.getId())) {
                 anyCompleted = true;
                 TextView completed = text(
-                        "âœ“  " + lesson.getLevel() + " â€¢ Aula " + lesson.getOrder() + "\n    " + lesson.getTitle(),
+                        "✓  " + lesson.getLevel() + " • Aula " + lesson.getOrder() + "\n    " + lesson.getTitle(),
                         15, DARK, true, Gravity.START, 0, 0
                 );
                 completed.setPadding(dp(14), dp(12), dp(14), dp(12));
@@ -2790,7 +2862,7 @@ public class MainActivity extends AppCompatActivity {
         }
         if (!anyCompleted) {
             content.addView(text(
-                    "Conclua uma aula para vÃª-la aqui.",
+                    "Conclua uma aula para vê-la aqui.",
                     15, TEXT, false, Gravity.START, 0, 16
             ));
         }
@@ -2799,7 +2871,7 @@ public class MainActivity extends AppCompatActivity {
         restore.setBackground(pressable(WHITE, SOFT, 16, TEAL));
         restore.setOnClickListener(v -> new AlertDialog.Builder(this)
                 .setTitle("Restaurar progresso?")
-                .setMessage("As conclusÃµes serÃ£o removidas e apenas a primeira aula ficarÃ¡ concluÃ­da, como no protÃ³tipo original.")
+                .setMessage("As conclusões serão removidas e apenas a primeira aula ficará concluída, como no protótipo original.")
                 .setNegativeButton("Cancelar", null)
                 .setPositiveButton("Restaurar", (dialog, which) -> {
                     progressStore.restoreInitialState();
@@ -2854,7 +2926,7 @@ public class MainActivity extends AppCompatActivity {
         profileCard.addView(avatar);
         profileCard.addView(text(userName, 20, DARK, true, Gravity.CENTER, 12, 6));
         updateCalculatedLevel();
-        profileCard.addView(text("NÃ­vel atual: " + level.toUpperCase(Locale.ROOT), 15, TEAL, true, Gravity.CENTER, 0, 0));
+        profileCard.addView(text("Nível atual: " + level.toUpperCase(Locale.ROOT), 15, TEAL, true, Gravity.CENTER, 0, 0));
         content.addView(profileCard, matchWrap(0, 16));
 
         int accessDaysThisWeek = activityStore == null ? 0 : activityStore.accessDaysThisWeek();
@@ -2871,7 +2943,7 @@ public class MainActivity extends AppCompatActivity {
         statusCard.addView(text(status.message(), 15, TEXT, false, Gravity.START, 0, 10));
         statusCard.addView(text("Meta semanal: " + weeklyGoal + (weeklyGoal == 1 ? " dia" : " dias"), 15, DARK, true, Gravity.START, 0, 5));
         statusCard.addView(text("Acessos esta semana: " + accessDaysThisWeek + " / " + weeklyGoal, 15, DARK, true, Gravity.START, 0, 5));
-        statusCard.addView(text("MÃ©dia de acessos por semana: " + String.format(Locale.getDefault(), "%.1f", average), 15, DARK, true, Gravity.START, 0, 0));
+        statusCard.addView(text("Média de acessos por semana: " + String.format(Locale.getDefault(), "%.1f", average), 15, DARK, true, Gravity.START, 0, 0));
         content.addView(statusCard, matchWrap(0, 16));
 
         List<Song> songs = songRepository.publishedQueued();
@@ -2879,10 +2951,10 @@ public class MainActivity extends AppCompatActivity {
         int easySongs = songProgressStore == null ? 0 : songProgressStore.learnedCountByDifficulty(songs, Song.EASY);
         int mediumSongs = songProgressStore == null ? 0 : songProgressStore.learnedCountByDifficulty(songs, Song.MEDIUM);
         int hardSongs = songProgressStore == null ? 0 : songProgressStore.learnedCountByDifficulty(songs, Song.HARD);
-        content.addView(dashboardSectionTitle("MÃšSICAS"));
+        content.addView(dashboardSectionTitle("MÚSICAS"));
         content.addView(infoCard(
-                "MÃºsicas aprendidas",
-                learnedSongs + "\nFÃ¡ceis: " + easySongs + "\nMÃ©dias: " + mediumSongs + "\nDifÃ­ceis: " + hardSongs
+                "Músicas aprendidas",
+                learnedSongs + "\nFáceis: " + easySongs + "\nMédias: " + mediumSongs + "\nDifíceis: " + hardSongs
         ), matchWrap(0, 16));
 
         int completedLessons = progressStore.completedCount(LessonRepository.getAll());
@@ -2890,7 +2962,7 @@ public class MainActivity extends AppCompatActivity {
         int lessonPercent = progressStore.progressPercent(LessonRepository.getAll());
         content.addView(dashboardSectionTitle("AULAS"));
         content.addView(infoCard(
-                "Aulas concluÃ­das",
+                "Aulas concluídas",
                 completedLessons + " / " + totalLessons + "\nPercentual: " + lessonPercent + "%"
         ), matchWrap(0, 16));
 
@@ -2898,7 +2970,7 @@ public class MainActivity extends AppCompatActivity {
         restore.setBackground(pressable(WHITE, SOFT, 16, TEAL));
         restore.setOnClickListener(v -> new AlertDialog.Builder(this)
                 .setTitle("Resetar progresso?")
-                .setMessage("Todas as aulas voltarÃ£o para nÃ£o concluÃ­das.")
+                .setMessage("Todas as aulas voltarão para não concluídas.")
                 .setNegativeButton("Cancelar", null)
                 .setPositiveButton("Resetar", (dialog, which) -> {
                     progressStore.restoreInitialState();
@@ -2925,7 +2997,7 @@ public class MainActivity extends AppCompatActivity {
         root.removeAllViews();
 
         LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(pageHeader(module.name == null ? "MÃ³dulo" : module.name, () -> showCourse(level)),
+        shell.addView(pageHeader(module.name == null ? "Módulo" : module.name, () -> showCourse(level)),
                 new LinearLayout.LayoutParams(-1, dp(72)));
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
@@ -2934,7 +3006,7 @@ public class MainActivity extends AppCompatActivity {
             content.addView(text(module.description, 16, TEXT, false, Gravity.START, 0, 16));
         }
         if (module.items == null || module.items.isEmpty()) {
-            content.addView(text("Nenhum item ativo neste mÃ³dulo.", 16, TEXT, false, Gravity.START, 0, 0));
+            content.addView(text("Nenhum item ativo neste módulo.", 16, TEXT, false, Gravity.START, 0, 0));
         } else {
             for (LearningModuleItemResponse item : module.items) {
                 addModuleItem(content, item);
@@ -2949,7 +3021,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout card = column(SOFT, Gravity.TOP);
         card.setPadding(dp(16), dp(14), dp(16), dp(16));
         card.setBackground(roundRect(SOFT, 14));
-        card.addView(text(item.title == null || item.title.trim().isEmpty() ? "Item do mÃ³dulo" : item.title,
+        card.addView(text(item.title == null || item.title.trim().isEmpty() ? "Item do módulo" : item.title,
                 18, DARK, true, Gravity.START, 0, 8));
         if (item.instructions != null && !item.instructions.trim().isEmpty()) {
             card.addView(text(item.instructions, 14, TEXT, false, Gravity.START, 0, 10));
@@ -2958,7 +3030,7 @@ public class MainActivity extends AppCompatActivity {
             TextView done = button("MARCAR COMO APRENDIDA", DARK, WHITE, 50);
             done.setOnClickListener(v -> DedilharteApiClient.service()
                     .upsertModuleProgress(item.id, new ModuleProgressRequest(true, null))
-                    .enqueue(new ToastCallback<>("MÃºsica concluÃ­da no mÃ³dulo")));
+                    .enqueue(new ToastCallback<>("Música concluída no módulo")));
             card.addView(done, matchWrap(4, 0));
         } else if (item.multipleChoice != null) {
             card.addView(text(item.multipleChoice.question, 15, DARK, true, Gravity.START, 0, 10));
@@ -2983,13 +3055,13 @@ public class MainActivity extends AppCompatActivity {
         root.removeAllViews();
 
         LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(pageHeader("ConfiguraÃ§Ãµes", () -> showCourse(level)),
+        shell.addView(pageHeader("Configurações", () -> showCourse(level)),
                 new LinearLayout.LayoutParams(-1, dp(72)));
 
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(24), dp(26), dp(24), dp(32));
-        content.addView(text("ConfiguraÃ§Ãµes", 29, DARK, true, Gravity.START, 0, 18));
+        content.addView(text("Configurações", 29, DARK, true, Gravity.START, 0, 18));
 
         TextView editProfile = settingsItem("Editar perfil", DARK);
         editProfile.setOnClickListener(v -> showEditProfile());
@@ -3029,7 +3101,7 @@ public class MainActivity extends AppCompatActivity {
     private void confirmLogout() {
         new AlertDialog.Builder(this)
                 .setTitle("Sair da conta?")
-                .setMessage("Sua sessÃ£o local serÃ¡ encerrada.")
+                .setMessage("Sua sessão local será encerrada.")
                 .setNegativeButton("Cancelar", null)
                 .setPositiveButton("Sair", (dialog, which) -> logout())
                 .show();
@@ -3037,34 +3109,160 @@ public class MainActivity extends AppCompatActivity {
 
     private void showUserManagement() {
         stopPractice();
+        if (!isConfigurator()) {
+            showCourse(level);
+            return;
+        }
         screen = Screen.USER_MANAGEMENT;
         root.removeAllViews();
         LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(pageHeader("Gerenciar usuÃ¡rios", this::showConfiguratorDashboard),
+        shell.addView(pageHeader("Gerenciar usuários", this::showConfiguratorDashboard),
                 new LinearLayout.LayoutParams(-1, dp(72)));
+        ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(24), dp(24), dp(24), dp(32));
-        content.addView(text("Use esta tela para bloquear, desbloquear e excluir apenas usuÃ¡rios jÃ¡ bloqueados.", 16, TEXT, false, Gravity.START, 0, 16));
-        TextView create = button("Criar usuÃ¡rio", DARK, WHITE, 56);
-        create.setOnClickListener(v -> showCreateManagedUser());
-        content.addView(create, matchWrap(0, 0));
-        shell.addView(content, new LinearLayout.LayoutParams(-1, 0, 1));
+        content.addView(text("Usuários cadastrados", 24, DARK, true, Gravity.START, 0, 12));
+        LinearLayout list = column(WHITE, Gravity.TOP);
+        content.addView(list, matchWrap(0, 0));
+        list.addView(text("Carregando usuários...", 16, TEXT, false, Gravity.START, 0, 0));
+        scroll.addView(content);
+        shell.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         root.addView(shell, matchMatch());
+
+        DedilharteApiClient.service().getManagedUsers().enqueue(new Callback<UserListResponse>() {
+            @Override
+            public void onResponse(Call<UserListResponse> call, Response<UserListResponse> response) {
+                if (!response.isSuccessful()) {
+                    renderManagedUsersError(
+                            list,
+                            response.code() == 401 || response.code() == 403
+                                    ? "Sua conta nao tem permissao para listar usuarios."
+                                    : "Nao foi possivel carregar os usuarios."
+                    );
+                    return;
+                }
+                List<UserResponse> users = response.body() == null ? new ArrayList<>() : response.body().items;
+                renderManagedUsers(list, users == null ? new ArrayList<>() : users);
+            }
+
+            @Override
+            public void onFailure(Call<UserListResponse> call, Throwable t) {
+                renderManagedUsersError(list, "Nao foi possivel carregar os usuarios.");
+            }
+        });
+    }
+
+    private void renderManagedUsersError(LinearLayout list, String message) {
+        list.removeAllViews();
+        list.addView(text(message, 16, TEXT, false, Gravity.START, 0, 0));
+    }
+
+    private void renderManagedUsers(LinearLayout list, List<UserResponse> users) {
+        list.removeAllViews();
+        if (users == null) {
+            list.addView(text("Não foi possível carregar os usuários.", 16, TEXT, false, Gravity.START, 0, 0));
+            return;
+        }
+        if (users.isEmpty()) {
+            list.addView(text("Nenhum usuário encontrado.", 16, TEXT, false, Gravity.START, 0, 0));
+            return;
+        }
+        for (UserResponse user : users) {
+            LinearLayout card = column(SOFT, Gravity.TOP);
+            card.setPadding(dp(16), dp(14), dp(16), dp(16));
+            card.setBackground(roundRect(SOFT, 14));
+            String name = safeText(user.name).trim().isEmpty() ? "Usuário" : safeText(user.name);
+            String email = safeText(user.email).trim().isEmpty() ? "Sem login" : safeText(user.email);
+            String password = managedPassword(user);
+            card.addView(text(name, 18, DARK, true, Gravity.START, 0, 6));
+            card.addView(text(
+                    "Login: " + email + "\nSenha: " + password,
+                    14, TEXT, false, Gravity.START, 0, 12
+            ));
+
+            Spinner role = managedRoleSpinner(user.role);
+            card.addView(role, matchWrap(0, 10));
+            TextView save = button("SALVAR PERFIL", DARK, WHITE, 48);
+            save.setOnClickListener(v -> updateManagedRole(user, selectedManagedRole(role)));
+            card.addView(save, matchWrap(0, 0));
+            list.addView(card, matchWrap(0, 12));
+        }
+    }
+
+    private String managedPassword(UserResponse user) {
+        if (user == null) {
+            return "não disponível";
+        }
+        String password = safeText(user.temporaryPassword);
+        if (password.trim().isEmpty()) {
+            password = safeText(user.password);
+        }
+        return password.trim().isEmpty() ? "não disponível" : password;
+    }
+
+    private Spinner managedRoleSpinner(String selectedRole) {
+        Spinner spinner = simpleSpinner(new String[]{"Aluno", "Admin", "Configurador"});
+        if (ROLE_ADMIN.equals(selectedRole)) {
+            spinner.setSelection(1);
+        } else if (ROLE_CONFIGURATOR.equals(selectedRole)) {
+            spinner.setSelection(2);
+        } else {
+            spinner.setSelection(0);
+        }
+        spinner.setMinimumHeight(dp(54));
+        spinner.setBackground(roundRect(WHITE, 15));
+        return spinner;
+    }
+
+    private String selectedManagedRole(Spinner spinner) {
+        int position = spinner == null ? 0 : spinner.getSelectedItemPosition();
+        if (position == 1) {
+            return ROLE_ADMIN;
+        }
+        if (position == 2) {
+            return ROLE_CONFIGURATOR;
+        }
+        return ROLE_STUDENT;
+    }
+
+    private void updateManagedRole(UserResponse user, String role) {
+        if (user == null || user.id == null || user.id.trim().isEmpty()) {
+            Toast.makeText(this, "Usuário inválido", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        DedilharteApiClient.service()
+                .updateManagedRole(user.id, new RoleUpdateRequest(role))
+                .enqueue(new Callback<UserResponse>() {
+                    @Override
+                    public void onResponse(Call<UserResponse> call, Response<UserResponse> response) {
+                        Toast.makeText(MainActivity.this,
+                                response.isSuccessful() ? "Perfil atualizado" : "Não foi possível atualizar",
+                                Toast.LENGTH_SHORT).show();
+                        if (response.isSuccessful()) {
+                            showUserManagement();
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<UserResponse> call, Throwable t) {
+                        Toast.makeText(MainActivity.this, "Falha de conexão", Toast.LENGTH_SHORT).show();
+                    }
+                });
     }
 
     private void showCreateManagedUser() {
         stopPractice();
         root.removeAllViews();
         LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(pageHeader("Criar usuÃ¡rio", this::showConfiguratorDashboard),
+        shell.addView(pageHeader("Criar usuário", this::showConfiguratorDashboard),
                 new LinearLayout.LayoutParams(-1, dp(72)));
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(24), dp(24), dp(24), dp(32));
         EditText name = input("", "Nome");
         EditText email = input("", "E-mail");
-        EditText password = input("", "Senha temporÃ¡ria");
-        Spinner role = simpleSpinner(new String[]{"student", "admin"});
+        EditText password = input("", "Senha temporária");
+        Spinner role = simpleSpinner(new String[]{ROLE_STUDENT, ROLE_ADMIN, ROLE_CONFIGURATOR});
         content.addView(name, matchWrap(0, 10));
         content.addView(email, matchWrap(0, 10));
         content.addView(password, matchWrap(0, 10));
@@ -3075,7 +3273,7 @@ public class MainActivity extends AppCompatActivity {
                 email.getText().toString().trim(),
                 password.getText().toString(),
                 role.getSelectedItem().toString()
-        )).enqueue(new ToastCallback<>("UsuÃ¡rio criado")));
+        )).enqueue(new ToastCallback<>("Usuário criado")));
         content.addView(save, matchWrap(0, 0));
         scroll.addView(content);
         shell.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -3083,26 +3281,34 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showModuleManagement() {
+        showAdminModules();
+        if (System.currentTimeMillis() >= 0) {
+            return;
+        }
         stopPractice();
+        if (!isAdmin()) {
+            showConfiguratorDashboard();
+            return;
+        }
         screen = Screen.MODULE_MANAGEMENT;
         root.removeAllViews();
         LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(pageHeader("Gerenciar mÃ³dulos", this::showConfiguratorDashboard),
+        shell.addView(pageHeader("Gerenciar módulos", this::showAdminDashboard),
                 new LinearLayout.LayoutParams(-1, dp(72)));
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(24), dp(24), dp(24), dp(32));
-        content.addView(text("Criar mÃ³dulo", 24, DARK, true, Gravity.START, 0, 14));
-        EditText name = input("", "Nome do mÃ³dulo");
+        content.addView(text("Criar módulo", 24, DARK, true, Gravity.START, 0, 14));
+        EditText name = input("", "Nome do módulo");
         Spinner type = simpleSpinner(new String[]{"trivia", "exercises"});
-        EditText description = input("", "DescriÃ§Ã£o");
+        EditText description = input("", "Descrição");
         EditText order = input("", "Ordem");
         order.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         content.addView(name, matchWrap(0, 10));
         content.addView(type, matchWrap(0, 10));
         content.addView(description, matchWrap(0, 10));
         content.addView(order, matchWrap(0, 12));
-        TextView create = button("Criar mÃ³dulo", DARK, WHITE, 56);
+        TextView create = button("Criar módulo", DARK, WHITE, 56);
         create.setOnClickListener(v -> {
             int sortOrder = parseIntOrZero(order.getText().toString());
             DedilharteApiClient.service().createModule(new LearningModuleRequest(
@@ -3114,7 +3320,7 @@ public class MainActivity extends AppCompatActivity {
             )).enqueue(new Callback<LearningModuleResponse>() {
                 @Override
                 public void onResponse(Call<LearningModuleResponse> call, Response<LearningModuleResponse> response) {
-                    Toast.makeText(MainActivity.this, response.isSuccessful() ? "MÃ³dulo criado" : "NÃ£o foi possÃ­vel criar", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, response.isSuccessful() ? "Módulo criado" : "Não foi possível criar", Toast.LENGTH_SHORT).show();
                     if (response.isSuccessful()) {
                         showModuleManagement();
                     }
@@ -3122,12 +3328,12 @@ public class MainActivity extends AppCompatActivity {
 
                 @Override
                 public void onFailure(Call<LearningModuleResponse> call, Throwable t) {
-                    Toast.makeText(MainActivity.this, "Falha de conexÃ£o", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "Falha de conexão", Toast.LENGTH_SHORT).show();
                 }
             });
         });
         content.addView(create, matchWrap(0, 22));
-        content.addView(text("MÃ³dulos ativos", 24, DARK, true, Gravity.START, 0, 16));
+        content.addView(text("Módulos ativos", 24, DARK, true, Gravity.START, 0, 16));
         LinearLayout list = column(WHITE, Gravity.TOP);
         content.addView(list, matchWrap(0, 0));
         fetchDynamicModules(() -> {
@@ -3167,12 +3373,12 @@ public class MainActivity extends AppCompatActivity {
         content.addView(logo(156));
         content.addView(text("Dedilharte", 31, WHITE, true, Gravity.CENTER, 2, 8));
         content.addView(text(
-                "Aprendizado visual e guiado de dedilhado no violÃ£o.",
+                "Aprendizado visual e guiado de dedilhado no violão.",
                 17, WHITE, true, Gravity.CENTER, 0, 28
         ));
         content.addView(infoCard(
                 "SOBRE O PROJETO",
-                "Aplicativo educacional desenvolvido como Trabalho de ConclusÃ£o de Curso. O conteÃºdo foi pensado para iniciantes e estudantes intermediÃ¡rios praticarem cordas, arpejos, coordenaÃ§Ã£o e ritmo."
+                "Aplicativo educacional desenvolvido como Trabalho de Conclusão de Curso. O conteúdo foi pensado para iniciantes e estudantes intermediários praticarem cordas, arpejos, coordenação e ritmo."
         ), matchWrap(0, 14));
         content.addView(infoCard(
                 "TECNOLOGIA",
@@ -3180,9 +3386,9 @@ public class MainActivity extends AppCompatActivity {
         ), matchWrap(0, 14));
         content.addView(infoCard(
                 "ACESSIBILIDADE",
-                "Textos em portuguÃªs, controles grandes, contraste alto e treino em velocidade ajustÃ¡vel."
+                "Textos em português, controles grandes, contraste alto e treino em velocidade ajustável."
         ), matchWrap(0, 20));
-        content.addView(text("VersÃ£o 1.0 â€¢ Â© Dedilharte", 13, WHITE, false, Gravity.CENTER, 0, 0));
+        content.addView(text("Versão 1.0 • © Dedilharte", 13, WHITE, false, Gravity.CENTER, 0, 0));
 
         scroll.addView(content);
         shell.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -3196,7 +3402,7 @@ public class MainActivity extends AppCompatActivity {
         bar.setPadding(dp(10), 0, dp(12), 0);
         bar.setBackgroundColor(DARK);
 
-        TextView menu = text("â˜°", 38, WHITE, false, Gravity.CENTER, 0, 0);
+        TextView menu = text("☰", 38, WHITE, false, Gravity.CENTER, 0, 0);
         menu.setContentDescription("Abrir menu");
         menu.setOnClickListener(v -> openDrawer());
         bar.addView(menu, new LinearLayout.LayoutParams(dp(58), -1));
@@ -3217,7 +3423,7 @@ public class MainActivity extends AppCompatActivity {
         bar.setPadding(dp(8), 0, dp(14), 0);
         bar.setBackgroundColor(DARK);
 
-        TextView back = text("â€¹", 46, WHITE, false, Gravity.CENTER, 0, 0);
+        TextView back = text("‹", 46, WHITE, false, Gravity.CENTER, 0, 0);
         back.setContentDescription("Voltar");
         back.setOnClickListener(v -> backAction.run());
         bar.addView(back, new LinearLayout.LayoutParams(dp(58), -1));
@@ -3243,16 +3449,17 @@ public class MainActivity extends AppCompatActivity {
         TextView progress = drawer.findViewById(R.id.drawerProgress);
         TextView arpeggios = drawer.findViewById(R.id.drawerArpeggios);
         TextView songs = drawer.findViewById(R.id.drawerSongs);
+        TextView triviaBeginner = drawer.findViewById(R.id.drawerTriviaBeginner);
+        TextView triviaIntermediate = drawer.findViewById(R.id.drawerTriviaIntermediate);
         TextView settings = drawer.findViewById(R.id.drawerSettings);
         TextView admin = drawer.findViewById(R.id.drawerAdmin);
         View adminDivider = drawer.findViewById(R.id.drawerAdminDivider);
 
         bindProfilePhoto(avatar);
         name.setText(userName);
-        currentLevel.setText("NÃ­vel: " + level);
+        currentLevel.setText("Nível: " + level);
 
-        renderDrawerModules(dynamicScroll, dynamicTopDivider, dynamicBottomDivider, dynamic, dialog);
-        fetchDynamicModules(() -> renderDrawerModules(dynamicScroll, dynamicTopDivider, dynamicBottomDivider, dynamic, dialog));
+        hideDrawerModules(dynamicScroll, dynamicTopDivider, dynamicBottomDivider, dynamic);
         progress.setOnClickListener(v -> {
             dialog.dismiss();
             showProgress();
@@ -3265,11 +3472,19 @@ public class MainActivity extends AppCompatActivity {
             dialog.dismiss();
             showSongs();
         });
+        triviaBeginner.setOnClickListener(v -> {
+            dialog.dismiss();
+            chooseLevel(LessonRepository.BEGINNER);
+        });
+        triviaIntermediate.setOnClickListener(v -> {
+            dialog.dismiss();
+            chooseLevel(LessonRepository.INTERMEDIATE);
+        });
         settings.setOnClickListener(v -> {
             dialog.dismiss();
             showSettings();
         });
-        admin.setText(isConfigurator() ? "Painel configurador" : "AdministraÃ§Ã£o");
+        admin.setText(isConfigurator() ? "Painel configurador" : "Administração");
         admin.setVisibility(isStaff() ? View.VISIBLE : View.GONE);
         adminDivider.setVisibility(isStaff() ? View.VISIBLE : View.GONE);
         admin.setOnClickListener(v -> {
@@ -3301,13 +3516,57 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void hideDrawerModules(View dynamicScroll, View topDivider, View bottomDivider, LinearLayout dynamic) {
+        if (dynamic != null) {
+            dynamic.removeAllViews();
+        }
+        if (dynamicScroll != null) {
+            dynamicScroll.setVisibility(View.GONE);
+        }
+        if (topDivider != null) {
+            topDivider.setVisibility(View.GONE);
+        }
+        if (bottomDivider != null) {
+            bottomDivider.setVisibility(View.GONE);
+        }
+    }
+
+    private void openFixedTriviaModule(String moduleId, String fallbackTitle) {
+        LearningModuleResponse module = findDynamicModuleById(moduleId);
+        if (module != null) {
+            openDynamicModule(module);
+            return;
+        }
+        fetchDynamicModules(() -> {
+            LearningModuleResponse loaded = findDynamicModuleById(moduleId);
+            if (loaded != null) {
+                openDynamicModule(loaded);
+            } else {
+                Toast.makeText(this, fallbackTitle + " indisponível", Toast.LENGTH_SHORT).show();
+                showCourse(level);
+            }
+        });
+    }
+
+    private LearningModuleResponse findDynamicModuleById(String moduleId) {
+        for (LearningModuleResponse module : dynamicModules) {
+            if (module == null || !module.active) {
+                continue;
+            }
+            if (moduleId.equals(module.id)) {
+                return module;
+            }
+        }
+        return null;
+    }
+
     private void fetchDynamicModules(Runnable onFinished) {
         DedilharteApiClient.service().getModules().enqueue(new Callback<LearningModuleListResponse>() {
             @Override
             public void onResponse(Call<LearningModuleListResponse> call, Response<LearningModuleListResponse> response) {
                 if (response.isSuccessful() && response.body() != null && response.body().items != null) {
                     dynamicModules.clear();
-                    dynamicModules.addAll(response.body().items);
+                    dynamicModules.addAll(fixedTriviaModules(response.body().items));
                 }
                 if (onFinished != null) {
                     onFinished.run();
@@ -3469,9 +3728,9 @@ public class MainActivity extends AppCompatActivity {
     }
     private TextView lessonCard(Lesson lesson) {
         boolean completed = progressStore.isCompleted(lesson.getId());
-        String status = completed ? "ConcluÃ­da âœ“" : "NÃ£o concluÃ­da";
+        String status = completed ? "Concluída ✓" : "Não concluída";
         TextView card = text(
-                lesson.getOrder() + "Âª AULA  â€¢  " + status + "\n" + lesson.getTitle(),
+                lesson.getOrder() + "ª AULA  •  " + status + "\n" + lesson.getTitle(),
                 17,
                 WHITE,
                 true,
@@ -3490,7 +3749,7 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView songCard(String title, String songLevel, String chord) {
         TextView card = text(
-                title + "\n" + songLevel + "  â€¢  " + chord,
+                title + "\n" + songLevel + "  •  " + chord,
                 16, WHITE, true, Gravity.CENTER_VERTICAL, 0, 0
         );
         card.setPadding(dp(16), dp(11), dp(16), dp(11));
@@ -3502,7 +3761,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView songLearnedButton(Song song) {
         boolean learned = songProgressStore != null && songProgressStore.isLearned(song.getId());
         TextView view = button(
-                learned ? "MÃšSICA APRENDIDA âœ“" : "APRENDI ESTA MÃšSICA",
+                learned ? "MÚSICA APRENDIDA ✓" : "APRENDI ESTA MÚSICA",
                 learned ? PALE : CYAN,
                 learned ? DARK : WHITE,
                 54
@@ -3516,7 +3775,7 @@ public class MainActivity extends AppCompatActivity {
                 syncManager.syncSongProgress(song.getId(), newValue);
             }
             updateCalculatedLevel();
-            view.setText(newValue ? "MÃšSICA APRENDIDA âœ“" : "APRENDI ESTA MÃšSICA");
+            view.setText(newValue ? "MÚSICA APRENDIDA ✓" : "APRENDI ESTA MÚSICA");
             view.setTextColor(newValue ? DARK : WHITE);
             view.setBackground(pressable(newValue ? PALE : CYAN, DARK, 16, newValue ? DARK : WHITE));
         });
@@ -3566,7 +3825,7 @@ public class MainActivity extends AppCompatActivity {
         progress.setMax(100);
         progress.setProgress(percent);
         progress.getProgressDrawable().setColorFilter(CYAN, PorterDuff.Mode.SRC_IN);
-        progress.setContentDescription(percent + "% concluÃ­do");
+        progress.setContentDescription(percent + "% concluído");
         return progress;
     }
 
@@ -3594,7 +3853,7 @@ public class MainActivity extends AppCompatActivity {
                 stream.close();
             }
             if (source == null) {
-                throw new RuntimeException("Foto invÃ¡lida");
+                throw new RuntimeException("Foto inválida");
             }
             image.setImageBitmap(circleCrop(source));
         } catch (Exception ignored) {
@@ -3629,11 +3888,11 @@ public class MainActivity extends AppCompatActivity {
 
                 @Override
                 public void onFailure(Call<UserResponse> call, Throwable t) {
-                    Toast.makeText(MainActivity.this, "Foto salva localmente; sem conexÃ£o", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "Foto salva localmente; sem conexão", Toast.LENGTH_SHORT).show();
                 }
             });
         } catch (Exception ignored) {
-            Toast.makeText(this, "NÃ£o foi possÃ­vel preparar a foto", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Não foi possível preparar a foto", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -3753,7 +4012,7 @@ public class MainActivity extends AppCompatActivity {
 
     private Spinner difficultySpinner(String selectedDifficulty) {
         Spinner spinner = new Spinner(this);
-        String[] labels = {"FÃ¡cil", "MÃ©dia", "DifÃ­cil"};
+        String[] labels = {"Fácil", "Média", "Difícil"};
         ArrayAdapter<String> adapter = new ArrayAdapter<>(
                 this,
                 android.R.layout.simple_spinner_item,
@@ -3898,8 +4157,8 @@ public class MainActivity extends AppCompatActivity {
         }
         lastPlayedPosition[0] = -1;
         state.setText("Pausado");
-        startPause.setText("â–¶");
-        startPause.setContentDescription("Continuar mÃºsica");
+        startPause.setText("▶");
+        startPause.setContentDescription("Continuar música");
     }
 
     private void playCurrentPracticeEvent(TextView state) {
@@ -3991,7 +4250,7 @@ public class MainActivity extends AppCompatActivity {
         StringBuilder builder = new StringBuilder();
         for (int i = 0; i < pattern.length; i++) {
             if (i > 0) {
-                builder.append(" â€“ ");
+                builder.append(" – ");
             }
             builder.append(pattern[i]);
         }
@@ -4027,7 +4286,7 @@ public class MainActivity extends AppCompatActivity {
             return "Indicador (I)";
         }
         if (stringNumber == 2) {
-            return "MÃ©dio (M)";
+            return "Médio (M)";
         }
         return "Anelar (A)";
     }
@@ -4057,22 +4316,21 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onResponse(Call<T> call, Response<T> response) {
             Toast.makeText(MainActivity.this,
-                    response.isSuccessful() ? successMessage : "OperaÃ§Ã£o nÃ£o concluÃ­da",
+                    response.isSuccessful() ? successMessage : "Operação não concluída",
                     Toast.LENGTH_SHORT).show();
         }
 
         @Override
         public void onFailure(Call<T> call, Throwable t) {
-            Toast.makeText(MainActivity.this, "Falha de conexÃ£o", Toast.LENGTH_SHORT).show();
+            Toast.makeText(MainActivity.this, "Falha de conexão", Toast.LENGTH_SHORT).show();
         }
     }
 
-    @Override
-    public void onBackPressed() {
+    private void handleBackNavigation() {
         switch (screen) {
             case WELCOME:
             case COURSE:
-                super.onBackPressed();
+                finish();
                 break;
             case REGISTER:
             case LEVEL:
@@ -4116,8 +4374,10 @@ public class MainActivity extends AppCompatActivity {
                 break;
             case CONFIGURATOR_PANEL:
             case USER_MANAGEMENT:
-            case MODULE_MANAGEMENT:
                 showConfiguratorDashboard();
+                break;
+            case MODULE_MANAGEMENT:
+                showAdminDashboard();
                 break;
         }
     }

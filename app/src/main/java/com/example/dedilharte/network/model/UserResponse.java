@@ -4,6 +4,8 @@ public final class UserResponse {
     public String id;
     public String name;
     public String email;
+    public String password;
+    public String temporaryPassword;
     public String role;
     public int weeklyGoal = 3;
     public String accountStatus;

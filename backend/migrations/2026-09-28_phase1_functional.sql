@@ -111,5 +111,5 @@ CREATE INDEX IF NOT EXISTS idx_learning_module_progress_user
 INSERT INTO learning_modules (id, name, module_type, description, sort_order, active)
 VALUES
     ('module_trivia_beginner', 'Trivia Iniciante', 'trivia', 'Perguntas iniciais de dedilhado.', 1, TRUE),
-    ('module_trivia_intermediate', 'Trivia Intermediario', 'trivia', 'Perguntas intermediarias de dedilhado.', 2, TRUE)
+    ('module_trivia_intermediate', 'Trivia Intermediário', 'trivia', 'Perguntas intermediárias de dedilhado.', 2, TRUE)
 ON CONFLICT (id) DO NOTHING;

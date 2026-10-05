@@ -2,6 +2,64 @@ const crypto = require('crypto');
 const pool = require('../db');
 
 const DIFFICULTIES = new Set(['easy', 'medium', 'hard']);
+const DEFAULT_ARPEGGIOS = [
+  {
+    id: 'arp_c_major',
+    title: 'Dó maior (C)',
+    chord: 'C',
+    notes: [{ string: 5, fret: 3 }, { string: 3, fret: 0 }, { string: 2, fret: 1 }, { string: 1, fret: 0 }],
+    difficulty: 'easy',
+    sortOrder: 1,
+  },
+  {
+    id: 'arp_d_major',
+    title: 'Ré maior (D)',
+    chord: 'D',
+    notes: [{ string: 4, fret: 0 }, { string: 3, fret: 2 }, { string: 2, fret: 3 }, { string: 1, fret: 2 }],
+    difficulty: 'easy',
+    sortOrder: 2,
+  },
+  {
+    id: 'arp_e_major',
+    title: 'Mi maior (E)',
+    chord: 'E',
+    notes: [{ string: 6, fret: 0 }, { string: 3, fret: 1 }, { string: 2, fret: 0 }, { string: 1, fret: 0 }],
+    difficulty: 'easy',
+    sortOrder: 3,
+  },
+  {
+    id: 'arp_f_major',
+    title: 'Fá maior (F)',
+    chord: 'F',
+    notes: [{ string: 6, fret: 1 }, { string: 3, fret: 2 }, { string: 2, fret: 1 }, { string: 1, fret: 1 }],
+    difficulty: 'easy',
+    sortOrder: 4,
+  },
+  {
+    id: 'arp_g_major',
+    title: 'Sol maior (G)',
+    chord: 'G',
+    notes: [{ string: 6, fret: 3 }, { string: 3, fret: 0 }, { string: 2, fret: 0 }, { string: 1, fret: 3 }],
+    difficulty: 'easy',
+    sortOrder: 5,
+  },
+  {
+    id: 'arp_a_major',
+    title: 'Lá maior (A)',
+    chord: 'A',
+    notes: [{ string: 5, fret: 0 }, { string: 3, fret: 2 }, { string: 2, fret: 2 }, { string: 1, fret: 0 }],
+    difficulty: 'easy',
+    sortOrder: 6,
+  },
+  {
+    id: 'arp_b_major',
+    title: 'Si maior (B)',
+    chord: 'B',
+    notes: [{ string: 5, fret: 2 }, { string: 3, fret: 4 }, { string: 2, fret: 4 }, { string: 1, fret: 2 }],
+    difficulty: 'easy',
+    sortOrder: 7,
+  },
+];
 
 function normalizeDifficulty(value) {
   return DIFFICULTIES.has(value) ? value : 'easy';
@@ -9,6 +67,14 @@ function normalizeDifficulty(value) {
 
 function normalizeText(value) {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeId(value) {
+  const id = normalizeText(value);
+  if (!id || id === 'undefined' || id === 'null') {
+    return '';
+  }
+  return id;
 }
 
 function parseNotes(value) {
@@ -45,8 +111,39 @@ function toArpeggio(row) {
   };
 }
 
+async function ensureDefaultArpeggiosWhenEmpty() {
+  const count = await pool.query('SELECT COUNT(*)::INT AS total FROM arpeggios WHERE active = TRUE');
+  if (Number(count.rows[0]?.total || 0) > 0) {
+    return;
+  }
+
+  for (const arpeggio of DEFAULT_ARPEGGIOS) {
+    await pool.query(
+      `INSERT INTO arpeggios (id, title, chord, notes, difficulty, active, sort_order, updated_at)
+       VALUES ($1, $2, $3, $4::jsonb, $5, TRUE, $6, NOW())
+       ON CONFLICT (id) DO UPDATE
+       SET title = EXCLUDED.title,
+           chord = EXCLUDED.chord,
+           notes = EXCLUDED.notes,
+           difficulty = EXCLUDED.difficulty,
+           active = TRUE,
+           sort_order = EXCLUDED.sort_order,
+           updated_at = NOW()`,
+      [
+        arpeggio.id,
+        arpeggio.title,
+        arpeggio.chord,
+        JSON.stringify(arpeggio.notes),
+        arpeggio.difficulty,
+        arpeggio.sortOrder,
+      ]
+    );
+  }
+}
+
 async function listPublic(req, res, next) {
   try {
+    await ensureDefaultArpeggiosWhenEmpty();
     const result = await pool.query(
       `SELECT id, title, chord, notes, difficulty, active, sort_order, created_at, updated_at
        FROM arpeggios
@@ -78,9 +175,11 @@ async function getPublic(req, res, next) {
 
 async function listAdmin(req, res, next) {
   try {
+    await ensureDefaultArpeggiosWhenEmpty();
     const result = await pool.query(
       `SELECT id, title, chord, notes, difficulty, active, sort_order, created_at, updated_at
        FROM arpeggios
+       WHERE active = TRUE
        ORDER BY sort_order ASC, created_at ASC`
     );
     return res.json({ items: result.rows.map(toArpeggio) });
@@ -158,12 +257,17 @@ async function updateAdmin(req, res, next) {
 
 async function deleteAdmin(req, res, next) {
   try {
+    const id = normalizeId(req.params.id);
+    if (!id) {
+      return res.status(400).json({ error: 'ID do arpejo e obrigatorio.' });
+    }
+
     const result = await pool.query(
       `UPDATE arpeggios
        SET active = FALSE, updated_at = NOW()
-       WHERE id = $1
+       WHERE id = $1 AND active = TRUE
        RETURNING id`,
-      [req.params.id]
+      [id]
     );
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'Arpejo nao encontrado.' });

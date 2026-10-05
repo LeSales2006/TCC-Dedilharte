@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node src/server.js",
+    "migrate": "node src/runMigration.js",
     "test": "node --test"
   },
   "dependencies": {

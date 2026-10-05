@@ -3,11 +3,12 @@ CREATE TABLE IF NOT EXISTS users (
     name TEXT NOT NULL,
     email TEXT,
     password_hash TEXT,
+    managed_password TEXT,
     role TEXT NOT NULL DEFAULT 'student',
     weekly_goal SMALLINT NOT NULL DEFAULT 3,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT chk_users_role CHECK (role IN ('student', 'admin')),
+    CONSTRAINT chk_users_role CHECK (role IN ('student', 'admin', 'configurator')),
     CONSTRAINT chk_users_weekly_goal CHECK (weekly_goal BETWEEN 1 AND 7)
 );
 
@@ -16,6 +17,9 @@ ALTER TABLE users
 
 ALTER TABLE users
     ADD COLUMN IF NOT EXISTS password_hash TEXT;
+
+ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS managed_password TEXT;
 
 ALTER TABLE users
     ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'student';
@@ -31,7 +35,7 @@ BEGIN
         WHERE conname = 'chk_users_role'
     ) THEN
         ALTER TABLE users
-            ADD CONSTRAINT chk_users_role CHECK (role IN ('student', 'admin'));
+            ADD CONSTRAINT chk_users_role CHECK (role IN ('student', 'admin', 'configurator'));
     END IF;
 END $$;
 
@@ -89,6 +93,25 @@ CREATE TABLE IF NOT EXISTS user_song_progress (
 CREATE INDEX IF NOT EXISTS idx_user_song_progress_user
     ON user_song_progress(user_id);
 
+CREATE TABLE IF NOT EXISTS songs (
+    id VARCHAR PRIMARY KEY,
+    title VARCHAR(180) NOT NULL,
+    artist VARCHAR(180) NOT NULL DEFAULT '',
+    difficulty VARCHAR(20) NOT NULL DEFAULT 'easy',
+    recommended_bpm INTEGER NOT NULL DEFAULT 60,
+    tablature TEXT NOT NULL DEFAULT '',
+    queue_order INTEGER NOT NULL DEFAULT 0,
+    in_queue BOOLEAN NOT NULL DEFAULT TRUE,
+    status VARCHAR(20) NOT NULL DEFAULT 'rascunho',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT chk_songs_difficulty CHECK (difficulty IN ('easy', 'medium', 'hard')),
+    CONSTRAINT chk_songs_status CHECK (status IN ('rascunho', 'publicada', 'arquivada'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_songs_public_queue
+    ON songs(status, in_queue, queue_order, created_at);
+
 CREATE TABLE IF NOT EXISTS arpeggios (
     id VARCHAR PRIMARY KEY,
     title VARCHAR(150) NOT NULL,
@@ -115,4 +138,3 @@ VALUES
     ('arp_a_major', 'Lá maior (A)', 'A', '[{"string":5,"fret":0},{"string":3,"fret":2},{"string":2,"fret":2},{"string":1,"fret":0}]'::jsonb, 'easy', TRUE, 6),
     ('arp_b_major', 'Si maior (B)', 'B', '[{"string":5,"fret":2},{"string":3,"fret":4},{"string":2,"fret":4},{"string":1,"fret":2}]'::jsonb, 'easy', TRUE, 7)
 ON CONFLICT (id) DO NOTHING;
-

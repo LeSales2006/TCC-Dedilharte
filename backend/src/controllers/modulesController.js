@@ -3,6 +3,23 @@ const pool = require('../db');
 
 const MODULE_TYPES = new Set(['trivia', 'exercises']);
 const ITEM_TYPES = new Set(['song', 'multiple_choice']);
+const FIXED_TRIVIA_MODULES = [
+  {
+    id: 'module_trivia_beginner',
+    name: 'Trivia Iniciante',
+    moduleType: 'trivia',
+    description: 'Perguntas iniciais de dedilhado.',
+    sortOrder: 1,
+  },
+  {
+    id: 'module_trivia_intermediate',
+    name: 'Trivia Intermediário',
+    moduleType: 'trivia',
+    description: 'Perguntas intermediárias de dedilhado.',
+    sortOrder: 2,
+  },
+];
+const FIXED_TRIVIA_IDS = new Set(FIXED_TRIVIA_MODULES.map((module) => module.id));
 
 function text(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -60,6 +77,23 @@ function toModule(row, items = []) {
     updated_at: row.updated_at,
     items,
   };
+}
+
+async function ensureFixedTriviaModules() {
+  for (const module of FIXED_TRIVIA_MODULES) {
+    await pool.query(
+      `INSERT INTO learning_modules (id, name, module_type, description, sort_order, active, updated_at)
+       VALUES ($1, $2, $3, $4, $5, TRUE, NOW())
+       ON CONFLICT (id) DO UPDATE
+       SET name = EXCLUDED.name,
+           module_type = EXCLUDED.module_type,
+           description = EXCLUDED.description,
+           sort_order = EXCLUDED.sort_order,
+           active = TRUE,
+           updated_at = NOW()`,
+      [module.id, module.name, module.moduleType, module.description, module.sortOrder]
+    );
+  }
 }
 
 function validateModule(body, partial = false) {
@@ -127,11 +161,13 @@ function validateItem(body, partial = false) {
 
 async function listPublic(req, res, next) {
   try {
+    await ensureFixedTriviaModules();
     const moduleResult = await pool.query(
       `SELECT id, name, module_type, description, sort_order, active, created_by, created_at, updated_at
        FROM learning_modules
-       WHERE active = TRUE
-       ORDER BY sort_order ASC, created_at ASC`
+       WHERE active = TRUE AND id = ANY($1)
+       ORDER BY sort_order ASC, created_at ASC`,
+      [Array.from(FIXED_TRIVIA_IDS)]
     );
     if (moduleResult.rowCount === 0) {
       return res.json({ items: [] });
@@ -163,10 +199,13 @@ async function listPublic(req, res, next) {
 
 async function listStaff(req, res, next) {
   try {
+    await ensureFixedTriviaModules();
     const moduleResult = await pool.query(
       `SELECT id, name, module_type, description, sort_order, active, created_by, created_at, updated_at
        FROM learning_modules
-       ORDER BY sort_order ASC, created_at ASC`
+       WHERE id = ANY($1)
+       ORDER BY sort_order ASC, created_at ASC`,
+      [Array.from(FIXED_TRIVIA_IDS)]
     );
     if (moduleResult.rowCount === 0) {
       return res.json({ items: [] });
@@ -198,17 +237,7 @@ async function listStaff(req, res, next) {
 
 async function createModule(req, res, next) {
   try {
-    const payload = validateModule(req.body);
-    if (payload.error) return res.status(400).json({ error: payload.error });
-    const id = text(req.body.id) || `mod_${crypto.randomUUID()}`;
-    const result = await pool.query(
-      `INSERT INTO learning_modules
-       (id, name, module_type, description, sort_order, active, created_by, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-       RETURNING id, name, module_type, description, sort_order, active, created_by, created_at, updated_at`,
-      [id, payload.name, payload.moduleType, payload.description, payload.sortOrder, payload.active, req.user.id]
-    );
-    return res.status(201).json(toModule(result.rows[0], []));
+    return res.status(409).json({ error: 'As trivias sao fixas. Adicione musicas e exercicios nas trivias existentes.' });
   } catch (error) {
     return next(error);
   }
@@ -216,17 +245,7 @@ async function createModule(req, res, next) {
 
 async function updateModule(req, res, next) {
   try {
-    const payload = validateModule(req.body);
-    if (payload.error) return res.status(400).json({ error: payload.error });
-    const result = await pool.query(
-      `UPDATE learning_modules
-       SET name = $2, module_type = $3, description = $4, sort_order = $5, active = $6, updated_at = NOW()
-       WHERE id = $1
-       RETURNING id, name, module_type, description, sort_order, active, created_by, created_at, updated_at`,
-      [req.params.id, payload.name, payload.moduleType, payload.description, payload.sortOrder, payload.active]
-    );
-    if (result.rowCount === 0) return res.status(404).json({ error: 'Modulo nao encontrado.' });
-    return res.json(toModule(result.rows[0], []));
+    return res.status(409).json({ error: 'As trivias sao fixas. Edite apenas os itens de conteudo.' });
   } catch (error) {
     return next(error);
   }
@@ -235,6 +254,9 @@ async function updateModule(req, res, next) {
 async function createItem(req, res, next) {
   const client = await pool.connect();
   try {
+    if (!FIXED_TRIVIA_IDS.has(req.params.id)) {
+      return res.status(404).json({ error: 'Modulo nao encontrado.' });
+    }
     const payload = validateItem(req.body);
     if (payload.error) return res.status(400).json({ error: payload.error });
     await client.query('BEGIN');
@@ -283,9 +305,18 @@ async function updateItem(req, res, next) {
       `UPDATE learning_module_items
        SET item_type = $2, song_id = $3, title = $4, instructions = $5,
            sort_order = $6, active = $7, updated_at = NOW()
-       WHERE id = $1
+       WHERE id = $1 AND module_id = ANY($8)
        RETURNING id, module_id, item_type, song_id, title, instructions, sort_order, active, created_at, updated_at`,
-      [req.params.id, payload.itemType, payload.songId, payload.title, payload.instructions, payload.sortOrder, payload.active]
+      [
+        req.params.id,
+        payload.itemType,
+        payload.songId,
+        payload.title,
+        payload.instructions,
+        payload.sortOrder,
+        payload.active,
+        Array.from(FIXED_TRIVIA_IDS),
+      ]
     );
     if (itemResult.rowCount === 0) {
       await client.query('ROLLBACK');
@@ -317,9 +348,9 @@ async function updateItemOrder(req, res, next) {
     const result = await pool.query(
       `UPDATE learning_module_items
        SET sort_order = $2, updated_at = NOW()
-       WHERE id = $1
+       WHERE id = $1 AND module_id = ANY($3)
        RETURNING id, module_id, item_type, song_id, title, instructions, sort_order, active, created_at, updated_at`,
-      [req.params.id, sortOrder]
+      [req.params.id, sortOrder, Array.from(FIXED_TRIVIA_IDS)]
     );
     if (result.rowCount === 0) return res.status(404).json({ error: 'Item nao encontrado.' });
     return res.json(toPublicItem(result.rows[0]));
@@ -331,8 +362,8 @@ async function updateItemOrder(req, res, next) {
 async function deleteItem(req, res, next) {
   try {
     const result = await pool.query(
-      'DELETE FROM learning_module_items WHERE id = $1 RETURNING id',
-      [req.params.id]
+      'DELETE FROM learning_module_items WHERE id = $1 AND module_id = ANY($2) RETURNING id',
+      [req.params.id, Array.from(FIXED_TRIVIA_IDS)]
     );
     if (result.rowCount === 0) return res.status(404).json({ error: 'Item nao encontrado.' });
     return res.status(204).send();

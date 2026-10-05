@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const pool = require('../db');
 
 const ROLES = new Set(['student', 'admin', 'configurator']);
-const MANAGED_ROLES = new Set(['student', 'admin']);
+const MANAGED_ROLES = new Set(['student', 'admin', 'configurator']);
 const STATUS = new Set(['active', 'blocked']);
 const PHOTO_MIMES = new Set(['image/jpeg', 'image/png']);
 const MAX_PHOTO_BYTES = 1024 * 1024;
@@ -36,6 +36,8 @@ function toUser(row) {
     weeklyGoal: row.weekly_goal || 3,
     accountStatus: row.account_status || 'active',
     mustChangePassword: Boolean(row.must_change_password),
+    password: row.managed_password || '',
+    temporaryPassword: row.managed_password || '',
     hasPhoto: Boolean(row.has_photo),
     profilePhotoUpdatedAt: row.profile_photo_updated_at || null,
     created_at: row.created_at,
@@ -220,6 +222,22 @@ async function deleteMyPhoto(req, res, next) {
   }
 }
 
+async function listManagedUsers(req, res, next) {
+  try {
+    const result = await pool.query(
+      `SELECT id, name, email, role, weekly_goal, account_status, must_change_password,
+              (profile_photo IS NOT NULL) AS has_photo,
+              profile_photo_updated_at, created_at, updated_at
+       FROM users
+       WHERE email IS NOT NULL
+       ORDER BY LOWER(name), LOWER(email)`
+    );
+    return res.json({ items: result.rows.map(toUser) });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function createManagedUser(req, res, next) {
   try {
     const name = normalizeText(req.body.name || req.body.nome);
@@ -230,15 +248,16 @@ async function createManagedUser(req, res, next) {
       return res.status(400).json({ error: 'Nome, e-mail e senha temporaria valida sao obrigatorios.' });
     }
     if (!MANAGED_ROLES.has(role)) {
-      return res.status(400).json({ error: 'Role permitida: student ou admin.' });
+      return res.status(400).json({ error: 'Role permitida: student, admin ou configurator.' });
     }
     const passwordHash = await bcrypt.hash(password, 12);
     const result = await pool.query(
-      `INSERT INTO users (id, name, email, password_hash, role, must_change_password, updated_at)
-       VALUES ($1, $2, $3, $4, $5, TRUE, NOW())
+      `INSERT INTO users (id, name, email, password_hash, managed_password, role, must_change_password, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, TRUE, NOW())
        RETURNING id, name, email, role, weekly_goal, account_status, must_change_password,
-                 (profile_photo IS NOT NULL) AS has_photo, profile_photo_updated_at, created_at, updated_at`,
-      [crypto.randomUUID(), name, email, passwordHash, role]
+                 managed_password, (profile_photo IS NOT NULL) AS has_photo,
+                 profile_photo_updated_at, created_at, updated_at`,
+      [crypto.randomUUID(), name, email, passwordHash, password, role]
     );
     return res.status(201).json(toUser(result.rows[0]));
   } catch (error) {
@@ -253,18 +272,19 @@ async function updateManagedRole(req, res, next) {
   try {
     const role = normalizeText(req.body.role);
     if (!MANAGED_ROLES.has(role)) {
-      return res.status(400).json({ error: 'Role permitida: student ou admin.' });
+      return res.status(400).json({ error: 'Role permitida: student, admin ou configurator.' });
     }
     const result = await pool.query(
       `UPDATE users
        SET role = $2, token_version = token_version + 1, updated_at = NOW()
-       WHERE id = $1 AND role IN ('student', 'admin')
+       WHERE id = $1
        RETURNING id, name, email, role, weekly_goal, account_status, must_change_password,
-                 (profile_photo IS NOT NULL) AS has_photo, profile_photo_updated_at, created_at, updated_at`,
+                 managed_password, (profile_photo IS NOT NULL) AS has_photo,
+                 profile_photo_updated_at, created_at, updated_at`,
       [req.params.id, role]
     );
     if (result.rowCount === 0) {
-      return res.status(404).json({ error: 'Usuario gerenciavel nao encontrado.' });
+      return res.status(404).json({ error: 'Usuario nao encontrado.' });
     }
     return res.json(toUser(result.rows[0]));
   } catch (error) {
@@ -347,6 +367,7 @@ module.exports = {
   uploadMyPhoto,
   getMyPhoto,
   deleteMyPhoto,
+  listManagedUsers,
   createManagedUser,
   updateManagedRole,
   updateManagedStatus,

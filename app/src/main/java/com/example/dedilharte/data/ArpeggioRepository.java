@@ -55,9 +55,18 @@ public final class ArpeggioRepository {
     }
 
     public void delete(String id, OperationCallback callback) {
+        if (isBlank(id) || "undefined".equals(id) || "null".equals(id)) {
+            if (callback != null) {
+                callback.onComplete(false, 400);
+            }
+            return;
+        }
         api.deleteArpeggio(id).enqueue(new Callback<Void>() {
             @Override
             public void onResponse(Call<Void> call, Response<Void> response) {
+                if (response.isSuccessful()) {
+                    removeFromCache(id);
+                }
                 if (callback != null) {
                     callback.onComplete(response.isSuccessful(), response.code());
                 }
@@ -76,11 +85,14 @@ public final class ArpeggioRepository {
         return new Callback<ArpeggioListResponse>() {
             @Override
             public void onResponse(Call<ArpeggioListResponse> call, Response<ArpeggioListResponse> response) {
-                List<ArpeggioResponse> items = response.isSuccessful()
+                List<ArpeggioResponse> received = response.isSuccessful()
                         && response.body() != null
                         && response.body().items != null
                         ? response.body().items
-                        : cachedOrFallback();
+                        : null;
+                List<ArpeggioResponse> items = received == null || received.isEmpty()
+                        ? cachedOrFallback()
+                        : received;
                 if (updateCache && response.isSuccessful()) {
                     writeCache(items);
                 }
@@ -169,6 +181,20 @@ public final class ArpeggioRepository {
         } catch (Exception ignored) {
         }
         preferences.edit().putString(CACHE, array.toString()).apply();
+    }
+
+    private void removeFromCache(String id) {
+        List<ArpeggioResponse> items = readCache();
+        boolean changed = false;
+        for (int i = items.size() - 1; i >= 0; i--) {
+            if (id.equals(items.get(i).id)) {
+                items.remove(i);
+                changed = true;
+            }
+        }
+        if (changed) {
+            writeCache(items);
+        }
     }
 
     private List<ArpeggioResponse> fallback() {

@@ -85,8 +85,8 @@ public final class LessonRepository {
                 new int[]{5, 3, 2, 1}, 56, "Dó maior (C)"
         ));
         lessons.add(lesson(
-                "ini_4", BEGINNER, 4, "Prática de repertório",
-                "Aplique o dedilhado em uma progressão inspirada em Asa Branca.",
+                "ini_4", BEGINNER, 4, "Troca de acordes",
+                "Aplique o dedilhado em uma progressão simples.",
                 "Trocar acordes sem interromper o padrão da mão direita.",
                 "Nesta prática, o foco não é velocidade. Mantenha o padrão do arpejo enquanto alterna entre os acordes sugeridos: C, F e G.",
                 new String[]{
@@ -203,17 +203,17 @@ public final class LessonRepository {
                 new int[]{6, 3, 2, 1, 5, 3, 2, 1}, 76, "Em – D – C"
         ));
         lessons.add(lesson(
-                "int_6", INTERMEDIATE, 6, "Repertório aplicado",
-                "Combine uma progressão com baixo alternado.",
+                "int_6", INTERMEDIATE, 6, "Troca de acordes",
+                "Combine baixos alternados sem usar músicas fixas.",
                 "Manter clareza durante as trocas de acorde.",
                 "A mão direita deve continuar regular enquanto a esquerda prepara o próximo acorde. Antecipe mentalmente a troca antes do próximo baixo.",
                 new String[]{
                         "Treine o padrão em cada acorde.",
-                        "Faça a troca sem o metrônomo.",
+                        "Faça a troca sem metrônomo.",
                         "Ative o guia em velocidade baixa.",
-                        "Toque a progressão durante quatro ciclos."
+                        "Repita a sequência durante quatro ciclos."
                 },
-                new int[]{5, 3, 2, 1, 6, 3, 2, 1}, 74, "Am – F – C – G"
+                new int[]{5, 3, 2, 1, 6, 3, 2, 1}, 74, "Am - F - C - G"
         ));
         lessons.add(lesson(
                 "int_7", INTERMEDIATE, 7, "Desafio final",

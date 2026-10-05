@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { requireAdmin } = require('../src/middleware/authMiddleware');
+const { requireAdmin, requireConfigurator } = require('../src/middleware/authMiddleware');
 
 function response() {
   return {
@@ -37,6 +37,32 @@ test('requireAdmin permite admin', () => {
   let nextCalled = false;
 
   requireAdmin(req, res, () => {
+    nextCalled = true;
+  });
+
+  assert.equal(nextCalled, true);
+  assert.equal(res.statusCode, 200);
+});
+
+test('requireConfigurator retorna 403 para admin', () => {
+  const req = { user: { id: 'admin-1', role: 'admin' } };
+  const res = response();
+  let nextCalled = false;
+
+  requireConfigurator(req, res, () => {
+    nextCalled = true;
+  });
+
+  assert.equal(nextCalled, false);
+  assert.equal(res.statusCode, 403);
+});
+
+test('requireConfigurator permite configurator', () => {
+  const req = { user: { id: 'config-1', role: 'configurator' } };
+  const res = response();
+  let nextCalled = false;
+
+  requireConfigurator(req, res, () => {
     nextCalled = true;
   });
 

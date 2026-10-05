@@ -21,8 +21,12 @@ import com.example.dedilharte.network.model.RoleUpdateRequest;
 import com.example.dedilharte.network.model.SongProgressListResponse;
 import com.example.dedilharte.network.model.SongProgressRequest;
 import com.example.dedilharte.network.model.SongProgressResponse;
+import com.example.dedilharte.network.model.SongListResponse;
+import com.example.dedilharte.network.model.SongRequest;
+import com.example.dedilharte.network.model.SongResponse;
 import com.example.dedilharte.network.model.StatusUpdateRequest;
 import com.example.dedilharte.network.model.UserRequest;
+import com.example.dedilharte.network.model.UserListResponse;
 import com.example.dedilharte.network.model.UserResponse;
 
 import retrofit2.Call;
@@ -81,6 +85,21 @@ public interface DedilharteApiService {
     @POST("api/songs/progress")
     Call<SongProgressResponse> upsertSongProgress(@Body SongProgressRequest request);
 
+    @GET("api/songs")
+    Call<SongListResponse> getSongs();
+
+    @GET("api/admin/songs")
+    Call<SongListResponse> getAdminSongs();
+
+    @POST("api/admin/songs")
+    Call<SongResponse> createSong(@Body SongRequest request);
+
+    @PUT("api/admin/songs/{id}")
+    Call<SongResponse> updateSong(@Path("id") String id, @Body SongRequest request);
+
+    @DELETE("api/admin/songs/{id}")
+    Call<Void> deleteSong(@Path("id") String id);
+
     @GET("api/arpeggios")
     Call<ArpeggioListResponse> getArpeggios();
 
@@ -122,6 +141,9 @@ public interface DedilharteApiService {
 
     @POST("api/configurator/users")
     Call<UserResponse> createManagedUser(@Body ManagedUserRequest request);
+
+    @GET("api/configurator/users")
+    Call<UserListResponse> getManagedUsers();
 
     @PATCH("api/configurator/users/{id}/role")
     Call<UserResponse> updateManagedRole(@Path("id") String id, @Body RoleUpdateRequest request);
