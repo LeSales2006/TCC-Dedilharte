@@ -91,7 +91,7 @@
     <TextView
         android:id="@+id/drawerTriviaBeginner"
         style="@style/DrawerMenuItem"
-        android:text="Trilha Iniciante" />
+        android:text="Trivia Iniciante" />
 
     <View
         android:layout_width="match_parent"
@@ -101,7 +101,7 @@
     <TextView
         android:id="@+id/drawerTriviaIntermediate"
         style="@style/DrawerMenuItem"
-        android:text="Trilha Intermediário" />
+        android:text="Trivia Intermediário" />
 
     <View
         android:layout_width="match_parent"

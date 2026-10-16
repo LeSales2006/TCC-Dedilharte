@@ -111,36 +111,6 @@ public class MainActivity extends AppCompatActivity {
     private static final int SOFT = Color.rgb(232, 246, 246);
     private static final int TEXT = Color.rgb(35, 66, 64);
     private static final int WHITE = Color.WHITE;
-    private static final Arpeggio[] ARPEGGIOS = {
-            new Arpeggio(
-                    "D\u00f3 maior (C)",
-                    new int[][]{{5, 3}, {3, 0}, {2, 1}, {1, 0}}
-            ),
-            new Arpeggio(
-                    "R\u00e9 maior (D)",
-                    new int[][]{{4, 0}, {3, 2}, {2, 3}, {1, 2}}
-            ),
-            new Arpeggio(
-                    "Mi maior (E)",
-                    new int[][]{{6, 0}, {3, 1}, {2, 0}, {1, 0}}
-            ),
-            new Arpeggio(
-                    "F\u00e1 maior (F)",
-                    new int[][]{{6, 1}, {3, 2}, {2, 1}, {1, 1}}
-            ),
-            new Arpeggio(
-                    "Sol maior (G)",
-                    new int[][]{{6, 3}, {3, 0}, {2, 0}, {1, 3}}
-            ),
-            new Arpeggio(
-                    "L\u00e1 maior (A)",
-                    new int[][]{{5, 0}, {3, 2}, {2, 2}, {1, 0}}
-            ),
-            new Arpeggio(
-                    "Si maior (B)",
-                    new int[][]{{5, 2}, {3, 4}, {2, 4}, {1, 2}}
-            )
-    };
 
     private static final class Arpeggio {
         private final String id;
@@ -836,64 +806,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showCourse(String selectedLevel) {
-        stopPractice();
-        screen = Screen.COURSE;
-        currentLesson = null;
         level = selectedLevel;
         saveActiveProfile();
-        root.removeAllViews();
-
-        LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(mainHeader(), new LinearLayout.LayoutParams(-1, dp(72)));
-
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
-        LinearLayout content = column(WHITE, Gravity.TOP);
-        content.setPadding(dp(24), dp(24), dp(24), dp(32));
-
-        content.addView(text("Olá, " + firstName() + "!", 18, TEAL, true, Gravity.START, 0, 6));
-        content.addView(text(
-                "Trilha " + selectedLevel,
-                30, DARK, true, Gravity.START, 0, 8
-        ));
-        content.addView(text(
-                selectedLevel.equals(LessonRepository.BEGINNER)
-                        ? "Comece pelas cordas e avance até seu primeiro acompanhamento completo."
-                        : "Desenvolva coordenação, variações rítmicas e arpejos mais completos.",
-                15, TEXT, false, Gravity.START, 0, 18
-        ));
-        content.addView(trackSwitchPanel(selectedLevel), matchWrap(0, 18));
-
-        List<Lesson> lessons = LessonRepository.getLessons(selectedLevel);
-        int completed = progressStore.completedCount(lessons);
-        int percent = progressStore.progressPercent(lessons);
-        content.addView(progressPanel(completed, lessons.size(), percent), matchWrap(0, 18));
-
-        Lesson next = firstIncomplete(lessons);
-        if (next != null) {
-            TextView continueButton = button(
-                    "CONTINUAR: AULA " + next.getOrder(),
-                    DARK, WHITE, 58
-            );
-            continueButton.setOnClickListener(v -> showLessonDetail(next));
-            content.addView(continueButton, matchWrap(0, 24));
-        }
-
-        content.addView(text(
-                selectedLevel.equals(LessonRepository.INTERMEDIATE) ? "Exercícios intermediários" : "Aulas",
-                22, DARK, true, Gravity.START, 0, 12
-        ));
-        for (Lesson lesson : lessons) {
-            TextView card = lessonCard(lesson);
-            card.setOnClickListener(v -> showLessonDetail(lesson));
-            content.addView(card, matchWrap(0, 14));
-        }
-
-        scroll.addView(content);
-        shell.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-        root.addView(shell, matchMatch());
+        boolean intermediate = LessonRepository.INTERMEDIATE.equals(selectedLevel);
+        openFixedTriviaModule(intermediate ? MODULE_TRIVIA_INTERMEDIATE : MODULE_TRIVIA_BEGINNER,
+                intermediate ? "Trivia Intermediário" : "Trivia Iniciante");
     }
-
     private View trackSwitchPanel(String selectedLevel) {
         LinearLayout panel = column(SOFT, Gravity.TOP);
         panel.setPadding(dp(16), dp(14), dp(16), dp(16));
@@ -1454,11 +1372,11 @@ public class MainActivity extends AppCompatActivity {
                 15, TEXT, false, Gravity.START, 0, 22
         ));
 
-        renderArpeggioCards(content, arpeggioRepository == null ? fallbackArpeggios() : arpeggioRepository.cachedOrFallback());
+        content.addView(text("Carregando arpejos…", 16, TEXT, false, Gravity.START, 0, 0));
         if (arpeggioRepository != null) {
             arpeggioRepository.fetchPublic((items, fromNetwork) -> {
-                if (screen == Screen.ARPEGGIOS) {
-                    renderArpeggioCards(content, items);
+                if (screen == Screen.ARPEGGIOS && shell.getParent() == root) {
+                    renderArpeggioCards(content, fromNetwork ? items : null);
                 }
             });
         }
@@ -1472,9 +1390,15 @@ public class MainActivity extends AppCompatActivity {
         while (content.getChildCount() > 2) {
             content.removeViewAt(2);
         }
-        List<ArpeggioResponse> source = items == null || items.isEmpty()
-                ? fallbackArpeggios()
-                : items;
+        TextView refresh = button("ATUALIZAR", DARK, WHITE, 48);
+        refresh.setOnClickListener(v -> showArpeggios());
+        content.addView(refresh, matchWrap(0, 12));
+        if (items == null || items.isEmpty()) {
+            content.addView(text(items == null ? "Não foi possível carregar os arpejos." : "Nenhum arpejo cadastrado.",
+                    16, TEXT, false, Gravity.START, 0, 0));
+            return;
+        }
+        List<ArpeggioResponse> source = items;
         for (ArpeggioResponse item : source) {
             if (!item.active) {
                 continue;
@@ -1486,25 +1410,6 @@ public class MainActivity extends AppCompatActivity {
             card.setOnClickListener(v -> showArpeggioPractice(arpeggio));
             content.addView(card, matchWrap(0, 12));
         }
-    }
-
-    private List<ArpeggioResponse> fallbackArpeggios() {
-        List<ArpeggioResponse> items = new ArrayList<>();
-        int order = 1;
-        for (Arpeggio arpeggio : ARPEGGIOS) {
-            ArpeggioResponse response = new ArpeggioResponse();
-            response.id = arpeggio.id;
-            response.title = arpeggio.title;
-            response.chord = arpeggio.chord;
-            response.difficulty = arpeggio.difficulty;
-            response.active = true;
-            response.sortOrder = order++;
-            for (int[] note : arpeggio.notes) {
-                response.notes.add(new ArpeggioNote(note[0], note[1]));
-            }
-            items.add(response);
-        }
-        return items;
     }
 
     private void showArpeggioPractice(Arpeggio arpeggio) {
@@ -1709,17 +1614,28 @@ public class MainActivity extends AppCompatActivity {
 
         ScrollView resultsScroll = new ScrollView(this);
         LinearLayout results = column(TEAL, Gravity.TOP);
-        final List<Song> currentSongs = new ArrayList<>(songRepository.publishedQueued());
-        renderSongs(results, "", currentSongs);
+        final List<Song> currentSongs = new ArrayList<>();
+        search.setEnabled(false);
+        results.addView(text("Carregando músicas…", 16, WHITE, false, Gravity.START, 0, 0));
+        TextView refreshSongs = button("ATUALIZAR", DARK, WHITE, 48);
+        refreshSongs.setOnClickListener(v -> showSongs());
+        content.addView(refreshSongs, matchWrap(0, 12));
         resultsScroll.addView(results);
         content.addView(resultsScroll, new LinearLayout.LayoutParams(-1, 0, 1));
         shell.addView(content, new LinearLayout.LayoutParams(-1, 0, 1));
         root.addView(shell, matchMatch());
 
         songRepository.fetchPublishedQueued((songs, fromNetwork) -> {
-            if (screen == Screen.SONGS) {
+            if (!isDestroyed() && shell.getParent() == root) {
                 currentSongs.clear();
+                if (!fromNetwork) {
+                    results.removeAllViews();
+                    results.addView(text("Não foi possível carregar as músicas. Toque em Atualizar para tentar novamente.",
+                            16, WHITE, false, Gravity.START, 0, 0));
+                    return;
+                }
                 currentSongs.addAll(songs);
+                search.setEnabled(true);
                 renderSongs(results, search.getText().toString(), currentSongs);
             }
         });
@@ -1884,6 +1800,10 @@ public class MainActivity extends AppCompatActivity {
 
     private void renderAdminModules(LinearLayout list, List<LearningModuleResponse> modules) {
         list.removeAllViews();
+        if (modules == null) {
+            list.addView(text("Não foi possível carregar os módulos. Tente novamente.", 16, TEXT, false, Gravity.START, 0, 0));
+            return;
+        }
         List<LearningModuleResponse> fixedModules = fixedTriviaModules(modules);
         if (fixedModules.isEmpty()) {
             list.addView(text("Nenhum módulo encontrado.", 16, TEXT, false, Gravity.START, 0, 0));
@@ -1919,20 +1839,9 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         }
-        result.add(beginner == null ? fixedTriviaModule(MODULE_TRIVIA_BEGINNER, "Trivia Iniciante", 1) : beginner);
-        result.add(intermediate == null ? fixedTriviaModule(MODULE_TRIVIA_INTERMEDIATE, "Trivia Intermediario", 2) : intermediate);
+        if (beginner != null) result.add(beginner);
+        if (intermediate != null) result.add(intermediate);
         return result;
-    }
-
-    private LearningModuleResponse fixedTriviaModule(String id, String name, int sortOrder) {
-        LearningModuleResponse module = new LearningModuleResponse();
-        module.id = id;
-        module.name = name;
-        module.moduleType = "trivia";
-        module.description = "";
-        module.sortOrder = sortOrder;
-        module.active = true;
-        return module;
     }
 
     private void showAdminModuleItems(LearningModuleResponse module) {
@@ -2092,37 +2001,122 @@ public class MainActivity extends AppCompatActivity {
         root.addView(shell, matchMatch());
     }
 
+    private static final class ModuleSongDraft {
+        String title = "";
+        String instructions = "";
+        String order = "0";
+        String songId;
+    }
+
     private void showModuleSongItemEditor(LearningModuleResponse module, LearningModuleItemResponse existing) {
-        if (!isAdmin()) {
-            showCourse(level);
-            return;
+        ModuleSongDraft draft = new ModuleSongDraft();
+        if (existing != null) {
+            draft.title = safeText(existing.title);
+            draft.instructions = safeText(existing.instructions);
+            draft.order = String.valueOf(existing.sortOrder);
+            draft.songId = existing.songId;
         }
+        showModuleSongItemEditor(module, existing, draft);
+    }
+
+    private void showModuleSongItemEditor(LearningModuleResponse module, LearningModuleItemResponse existing, ModuleSongDraft draft) {
+        if (!isAdmin()) { showCourse(level); return; }
         screen = Screen.ADMIN_MODULE_ITEM_EDITOR;
         root.removeAllViews();
-        boolean editing = existing != null;
         LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(pageHeader(editing ? "Editar música do módulo" : "Nova música no módulo", () -> showAdminModuleItems(module)),
+        shell.addView(pageHeader(existing != null ? "Editar música do módulo" : "Nova música no módulo", () -> showAdminModuleItems(module)),
                 new LinearLayout.LayoutParams(-1, dp(72)));
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(18), dp(18), dp(18), dp(28));
-        EditText title = input(editing ? safeText(existing.title) : "", "Título do item");
-        EditText songId = input(editing ? safeText(existing.songId) : "", "ID da música");
-        EditText instructions = input(editing ? safeText(existing.instructions) : "", "Instruções");
-        EditText sortOrder = input(editing ? String.valueOf(existing.sortOrder) : "", "Ordem");
+        EditText title = input(draft.title, "Título do item (opcional)");
+        EditText instructions = input(draft.instructions, "Instruções");
+        EditText sortOrder = input(draft.order, "Ordem");
         sortOrder.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         content.addView(title, matchWrap(0, 10));
-        content.addView(songId, matchWrap(0, 10));
+        content.addView(text("Música", 16, DARK, true, Gravity.START, 0, 8));
+        Spinner selector = simpleSpinner(new String[]{"Selecione uma música"});
+        content.addView(selector, matchWrap(0, 10));
+        TextView status = text("Carregando músicas…", 15, TEXT, false, Gravity.START, 0, 10);
+        content.addView(status);
+        TextView retry = button("RECARREGAR MÚSICAS", SOFT, DARK, 48);
+        content.addView(retry, matchWrap(0, 10));
+        TextView create = button("+ NOVA MÚSICA", CYAN, DARK, 48);
+        content.addView(create, matchWrap(0, 10));
         content.addView(instructions, matchWrap(0, 10));
         content.addView(sortOrder, matchWrap(0, 12));
         TextView save = button("Salvar", DARK, WHITE, 56);
-        save.setOnClickListener(v -> saveModuleSongItem(module, existing, title, songId, instructions, sortOrder, true));
         content.addView(save, matchWrap(0, 0));
         scroll.addView(content);
         shell.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         root.addView(shell, matchMatch());
+        List<Song> choices = new ArrayList<>();
+        Runnable load = () -> {
+            selector.setEnabled(false);
+            save.setEnabled(false);
+            retry.setEnabled(false);
+            status.setText("Carregando músicas…");
+            songRepository.fetchAdmin((songs, success) -> {
+                if (isDestroyed() || shell.getParent() != root) return;
+                retry.setEnabled(true);
+                choices.clear();
+                if (!success) {
+                    status.setText("Não foi possível carregar as músicas. Tente recarregar.");
+                    return;
+                }
+                choices.addAll(songs);
+                List<String> labels = new ArrayList<>();
+                labels.add("Selecione uma música");
+                int selected = 0;
+                for (Song song : choices) {
+                    labels.add(song.getTitle() + (song.getArtist().trim().isEmpty() ? "" : " - " + song.getArtist()));
+                    if (song.getId().equals(draft.songId)) selected = labels.size() - 1;
+                }
+                ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, labels);
+                adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+                selector.setAdapter(adapter);
+                selector.setSelection(selected);
+                selector.setEnabled(!choices.isEmpty());
+                save.setEnabled(!choices.isEmpty());
+                status.setText(choices.isEmpty() ? "Nenhuma música cadastrada."
+                        : draft.songId != null && selected == 0 ? "A música selecionada não está mais disponível. Selecione outra." : "");
+            });
+        };
+        retry.setOnClickListener(v -> load.run());
+        create.setOnClickListener(v -> {
+            draft.title = title.getText().toString();
+            draft.instructions = instructions.getText().toString();
+            draft.order = sortOrder.getText().toString();
+            int selected = selector.getSelectedItemPosition() - 1;
+            if (selected >= 0 && selected < choices.size()) draft.songId = choices.get(selected).getId();
+            showSongEditor(null, () -> showModuleSongItemEditor(module, existing, draft), saved -> {
+                draft.songId = saved.getId();
+                showModuleSongItemEditor(module, existing, draft);
+            });
+        });
+        save.setOnClickListener(v -> {
+            int selected = selector.getSelectedItemPosition() - 1;
+            if (selected < 0 || selected >= choices.size()) {
+                status.setText("Selecione uma música cadastrada.");
+                return;
+            }
+            int order;
+            try {
+                order = Integer.parseInt(sortOrder.getText().toString().trim());
+                if (order < 0) throw new NumberFormatException();
+            } catch (NumberFormatException e) {
+                sortOrder.setError("Informe uma ordem inteira entre 0 e 2147483647.");
+                return;
+            }
+            Song selectedSong = choices.get(selected);
+            LearningModuleItemRequest request = new LearningModuleItemRequest("song", selectedSong.getId(),
+                    title.getText().toString().trim().isEmpty() ? selectedSong.getTitle() : title.getText().toString().trim(),
+                    instructions.getText().toString().trim(), order, existing == null || existing.active,
+                    null, null, null, null);
+            sendModuleItem(module, existing, request, save, status, retry, create, selector);
+        });
+        load.run();
     }
-
     private void saveModuleMultipleChoiceItem(
             LearningModuleResponse module,
             LearningModuleItemResponse existing,
@@ -2166,34 +2160,6 @@ public class MainActivity extends AppCompatActivity {
         sendModuleItem(module, existing, request);
     }
 
-    private void saveModuleSongItem(
-            LearningModuleResponse module,
-            LearningModuleItemResponse existing,
-            EditText title,
-            EditText songId,
-            EditText instructions,
-            EditText sortOrder,
-            boolean active
-    ) {
-        if (songId.getText().toString().trim().isEmpty()) {
-            songId.setError("Informe o ID da música.");
-            return;
-        }
-        LearningModuleItemRequest request = new LearningModuleItemRequest(
-                "song",
-                songId.getText().toString().trim(),
-                title.getText().toString().trim(),
-                instructions.getText().toString().trim(),
-                parseIntOrZero(sortOrder.getText().toString()),
-                active,
-                null,
-                null,
-                null,
-                null
-        );
-        sendModuleItem(module, existing, request);
-    }
-
     private void saveModuleItem(LearningModuleResponse module, LearningModuleItemResponse existing, boolean active) {
         if ("song".equals(existing.itemType)) {
             LearningModuleItemRequest request = new LearningModuleItemRequest(
@@ -2222,13 +2188,28 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void sendModuleItem(LearningModuleResponse module, LearningModuleItemResponse existing, LearningModuleItemRequest request) {
+        sendModuleItem(module, existing, request, null, null);
+    }
+
+    private void sendModuleItem(LearningModuleResponse module, LearningModuleItemResponse existing, LearningModuleItemRequest request,
+                                TextView save, TextView status, View... controls) {
+        for (View control : controls) control.setEnabled(false);
+        if (save != null) { save.setEnabled(false); save.setText("Salvando…"); }
+        if (status != null) status.setText("Salvando vínculo…");
+        View editor = root.getChildAt(0);
         Call<LearningModuleItemResponse> call = existing == null
                 ? DedilharteApiClient.service().createModuleItem(module.id, request)
                 : DedilharteApiClient.service().updateModuleItem(existing.id, request);
         call.enqueue(new Callback<LearningModuleItemResponse>() {
             @Override
             public void onResponse(Call<LearningModuleItemResponse> call, Response<LearningModuleItemResponse> response) {
-                Toast.makeText(MainActivity.this, response.isSuccessful() ? "Item salvo" : "Não foi possível salvar", Toast.LENGTH_SHORT).show();
+                if (isDestroyed() || editor.getParent() != root) return;
+                if (save != null) { save.setEnabled(true); save.setText("Salvar"); }
+                for (View control : controls) control.setEnabled(true);
+                String message = response.isSuccessful() ? "Item salvo"
+                        : com.example.dedilharte.network.ApiErrors.message(response, "Não foi possível salvar o vínculo.");
+                if (status != null) status.setText(message);
+                Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
                 if (response.isSuccessful()) {
                     reloadAdminModule(module.id);
                 }
@@ -2236,6 +2217,10 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onFailure(Call<LearningModuleItemResponse> call, Throwable t) {
+                if (isDestroyed() || editor.getParent() != root) return;
+                if (save != null) { save.setEnabled(true); save.setText("Salvar"); }
+                for (View control : controls) control.setEnabled(true);
+                if (status != null) status.setText("Falha de conexão. Tente novamente.");
                 Toast.makeText(MainActivity.this, "Falha de conexão", Toast.LENGTH_SHORT).show();
             }
         });
@@ -2313,16 +2298,22 @@ public class MainActivity extends AppCompatActivity {
         ScrollView scroll = new ScrollView(this);
         LinearLayout results = column(WHITE, Gravity.TOP);
         final String[] statusFilter = {""};
-        final List<Song> currentSongs = new ArrayList<>(songRepository.all());
-        renderAdminSongs(results, "", statusFilter[0], currentSongs);
+        final List<Song> currentSongs = new ArrayList<>();
+        results.addView(text("Carregando músicas…", 16, TEXT, false, Gravity.START, 0, 0));
         scroll.addView(results);
         content.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         shell.addView(content, new LinearLayout.LayoutParams(-1, 0, 1));
         root.addView(shell, matchMatch());
 
         songRepository.fetchAdmin((songs, fromNetwork) -> {
-            if (screen == Screen.ADMIN_SONGS) {
+            if (screen == Screen.ADMIN_SONGS && shell.getParent() == root) {
                 currentSongs.clear();
+                if (!fromNetwork) {
+                    results.removeAllViews();
+                    results.addView(text("Não foi possível carregar as músicas. Reabra esta tela para tentar novamente.",
+                            16, TEXT, false, Gravity.START, 0, 0));
+                    return;
+                }
                 currentSongs.addAll(songs);
                 renderAdminSongs(results, search.getText().toString(), statusFilter[0], currentSongs);
             }
@@ -2424,27 +2415,22 @@ public class MainActivity extends AppCompatActivity {
             publish.setOnClickListener(v -> {
                 try {
                     TablatureParser.parse(song.getTablature(), song.getRecommendedBpm(), TablatureParser.DEFAULT_COLUMNS_PER_BEAT);
-                    songRepository.save(song.withStatus(Song.PUBLISHED.equals(song.getStatus()) ? Song.DRAFT : Song.PUBLISHED));
-                    showAdminSongs();
+                    saveSongAndReload(song.withStatus(Song.PUBLISHED.equals(song.getStatus()) ? Song.DRAFT : Song.PUBLISHED));
                 } catch (IllegalArgumentException ex) {
                     Toast.makeText(this, friendlyTablatureError(), Toast.LENGTH_LONG).show();
                 }
             });
             up.setOnClickListener(v -> {
-                songRepository.save(song.withQueue(Math.max(1, song.getQueueOrder() - 1), song.isInQueue()));
-                showAdminSongs();
+                saveSongAndReload(song.withQueue(Math.max(1, song.getQueueOrder() - 1), song.isInQueue()));
             });
             down.setOnClickListener(v -> {
-                songRepository.save(song.withQueue(song.getQueueOrder() + 1, song.isInQueue()));
-                showAdminSongs();
+                saveSongAndReload(song.withQueue(song.getQueueOrder() + 1, song.isInQueue()));
             });
             queue.setOnClickListener(v -> {
-                songRepository.save(song.withQueue(song.getQueueOrder(), !song.isInQueue()));
-                showAdminSongs();
+                saveSongAndReload(song.withQueue(song.getQueueOrder(), !song.isInQueue()));
             });
             archive.setOnClickListener(v -> {
-                songRepository.save(song.withStatus(Song.ARCHIVED));
-                showAdminSongs();
+                saveSongAndReload(song.withStatus(Song.ARCHIVED));
             });
             delete.setOnClickListener(v -> confirmDeleteSong(song));
             results.addView(card, matchWrap(0, 12));
@@ -2455,13 +2441,25 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void saveSongAndReload(Song song) {
+        songRepository.save(song, this::onSongOperationComplete);
+    }
+
+    private void onSongOperationComplete(boolean success) {
+        if (isDestroyed()) return;
+        if (success) {
+            showAdminSongs();
+        } else {
+            Toast.makeText(this, "Não foi possível salvar a alteração no servidor. Tente novamente.", Toast.LENGTH_LONG).show();
+        }
+    }
+
     private void confirmDeleteSong(Song song) {
         new AlertDialog.Builder(this)
                 .setTitle("Excluir música")
                 .setMessage("Deseja excluir definitivamente \"" + song.getTitle() + "\"?")
                 .setPositiveButton("Excluir", (dialog, which) -> {
-                    songRepository.delete(song.getId());
-                    showAdminSongs();
+                    songRepository.delete(song.getId(), this::onSongOperationComplete);
                 })
                 .setNegativeButton("Cancelar", null)
                 .show();
@@ -2488,7 +2486,7 @@ public class MainActivity extends AppCompatActivity {
 
         ScrollView scroll = new ScrollView(this);
         LinearLayout results = column(WHITE, Gravity.TOP);
-        renderAdminArpeggios(results, arpeggioRepository == null ? fallbackArpeggios() : arpeggioRepository.cachedOrFallback());
+        results.addView(text("Carregando arpejos…", 16, TEXT, false, Gravity.START, 0, 0));
         scroll.addView(results);
         content.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         shell.addView(content, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -2496,8 +2494,14 @@ public class MainActivity extends AppCompatActivity {
 
         if (arpeggioRepository != null) {
             arpeggioRepository.fetchAdmin((items, fromNetwork) -> {
-                if (screen == Screen.ADMIN_ARPEGGIOS) {
-                    renderAdminArpeggios(results, items == null || items.isEmpty() ? fallbackArpeggios() : items);
+                if (screen == Screen.ADMIN_ARPEGGIOS && shell.getParent() == root) {
+                    if (!fromNetwork) {
+                        results.removeAllViews();
+                        results.addView(text("Não foi possível carregar os arpejos. Reabra esta tela para tentar novamente.",
+                                16, TEXT, false, Gravity.START, 0, 0));
+                        return;
+                    }
+                    renderAdminArpeggios(results, items);
                 }
             });
         }
@@ -2670,6 +2674,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showSongEditor(Song song) {
+        showSongEditor(song, this::showAdminSongs, saved -> showAdminSongs());
+    }
+
+    private void showSongEditor(Song song, Runnable onBack, java.util.function.Consumer<Song> onSaved) {
         if (!isAdmin()) {
             showCourse(level);
             return;
@@ -2679,7 +2687,7 @@ public class MainActivity extends AppCompatActivity {
         boolean editing = song != null;
 
         LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(pageHeader(editing ? "Editar música" : "Nova música", this::showAdminSongs),
+        shell.addView(pageHeader(editing ? "Editar música" : "Nova música", onBack),
                 new LinearLayout.LayoutParams(-1, dp(72)));
 
         ScrollView scroll = new ScrollView(this);
@@ -2719,8 +2727,8 @@ public class MainActivity extends AppCompatActivity {
         content.addView(publish, matchWrap(0, 0));
 
         previewButton.setOnClickListener(v -> updatePreview(preview, tablature.getText().toString(), parseBpmOrZero(bpm)));
-        saveDraft.setOnClickListener(v -> saveSongFromEditor(song, title, artist, difficulty, bpm, tablature, Song.DRAFT));
-        publish.setOnClickListener(v -> saveSongFromEditor(song, title, artist, difficulty, bpm, tablature, Song.PUBLISHED));
+        saveDraft.setOnClickListener(v -> saveSongFromEditor(song, title, artist, difficulty, bpm, tablature, Song.DRAFT, onSaved, saveDraft, publish));
+        publish.setOnClickListener(v -> saveSongFromEditor(song, title, artist, difficulty, bpm, tablature, Song.PUBLISHED, onSaved, saveDraft, publish));
 
         scroll.addView(content);
         shell.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -2770,7 +2778,10 @@ public class MainActivity extends AppCompatActivity {
             Spinner difficulty,
             EditText bpmInput,
             EditText tablature,
-            String status
+            String status,
+            java.util.function.Consumer<Song> onSaved,
+            TextView saveDraft,
+            TextView publish
     ) {
         String titleValue = title.getText().toString().trim();
         int bpm = parseBpmOrZero(bpmInput);
@@ -2782,7 +2793,11 @@ public class MainActivity extends AppCompatActivity {
             bpmInput.setError("Informe o BPM recomendado.");
             return;
         }
-        if (Song.PUBLISHED.equals(status)) {
+        if (tablature.getText().toString().trim().isEmpty()) {
+            tablature.setError("Informe a tablatura ASCII.");
+            return;
+        }
+        {
             try {
                 TablatureParser.parse(tablature.getText().toString(), bpm, TablatureParser.DEFAULT_COLUMNS_PER_BEAT);
             } catch (IllegalArgumentException ex) {
@@ -2795,7 +2810,7 @@ public class MainActivity extends AppCompatActivity {
         }
         long now = System.currentTimeMillis();
         Song song = new Song(
-                existing == null ? "song_" + now : existing.getId(),
+                existing == null ? null : existing.getId(),
                 titleValue,
                 artist.getText().toString().trim(),
                 selectedDifficulty(difficulty),
@@ -2807,8 +2822,20 @@ public class MainActivity extends AppCompatActivity {
                 existing == null ? now : existing.getCreatedAt(),
                 now
         );
-        songRepository.save(song);
-        showAdminSongs();
+        saveDraft.setEnabled(false);
+        publish.setEnabled(false);
+        TextView selectedButton = Song.PUBLISHED.equals(status) ? publish : saveDraft;
+        selectedButton.setText("Salvando…");
+        View editor = root.getChildAt(0);
+        songRepository.save(song, existing == null, (saved, error) -> {
+            if (isDestroyed() || editor.getParent() != root) return;
+            saveDraft.setEnabled(true);
+            publish.setEnabled(true);
+            saveDraft.setText("SALVAR RASCUNHO");
+            publish.setText("PUBLICAR");
+            if (saved != null) onSaved.accept(saved);
+            else Toast.makeText(this, error, Toast.LENGTH_LONG).show();
+        });
     }
 
     private int parseBpmOrZero(EditText input) {
@@ -2997,14 +3024,19 @@ public class MainActivity extends AppCompatActivity {
         root.removeAllViews();
 
         LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(pageHeader(module.name == null ? "Módulo" : module.name, () -> showCourse(level)),
+        shell.addView(mainHeader(),
                 new LinearLayout.LayoutParams(-1, dp(72)));
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(24), dp(24), dp(24), dp(32));
+        content.addView(text(module.name == null ? "Trivia" : module.name, 24, DARK, true, Gravity.START, 0, 16));
+        content.addView(trackSwitchPanel(level), matchWrap(0, 16));
         if (module.description != null && !module.description.trim().isEmpty()) {
             content.addView(text(module.description, 16, TEXT, false, Gravity.START, 0, 16));
         }
+        TextView refresh = button("ATUALIZAR", DARK, WHITE, 48);
+        refresh.setOnClickListener(v -> openFixedTriviaModule(module.id, module.name));
+        content.addView(refresh, matchWrap(0, 16));
         if (module.items == null || module.items.isEmpty()) {
             content.addView(text("Nenhum item ativo neste módulo.", 16, TEXT, false, Gravity.START, 0, 0));
         } else {
@@ -3474,11 +3506,11 @@ public class MainActivity extends AppCompatActivity {
         });
         triviaBeginner.setOnClickListener(v -> {
             dialog.dismiss();
-            chooseLevel(LessonRepository.BEGINNER);
+            openFixedTriviaModule(MODULE_TRIVIA_BEGINNER, "Trivia Iniciante");
         });
         triviaIntermediate.setOnClickListener(v -> {
             dialog.dismiss();
-            chooseLevel(LessonRepository.INTERMEDIATE);
+            openFixedTriviaModule(MODULE_TRIVIA_INTERMEDIATE, "Trivia Intermediário");
         });
         settings.setOnClickListener(v -> {
             dialog.dismiss();
@@ -3531,41 +3563,59 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void openFixedTriviaModule(String moduleId, String fallbackTitle) {
-        LearningModuleResponse module = findDynamicModuleById(moduleId);
-        if (module != null) {
-            openDynamicModule(module);
-            return;
-        }
-        fetchDynamicModules(() -> {
-            LearningModuleResponse loaded = findDynamicModuleById(moduleId);
-            if (loaded != null) {
-                openDynamicModule(loaded);
-            } else {
-                Toast.makeText(this, fallbackTitle + " indisponível", Toast.LENGTH_SHORT).show();
-                showCourse(level);
+    private void openFixedTriviaModule(String moduleId, String moduleTitle) {
+        level = MODULE_TRIVIA_INTERMEDIATE.equals(moduleId) ? LessonRepository.INTERMEDIATE : LessonRepository.BEGINNER;
+        saveActiveProfile();
+        stopPractice();
+        screen = Screen.COURSE;
+        currentLesson = null;
+        root.removeAllViews();
+        LinearLayout shell = column(WHITE, Gravity.TOP);
+        shell.addView(mainHeader(),
+                new LinearLayout.LayoutParams(-1, dp(72)));
+        shell.addView(text(moduleTitle, 24, DARK, true, Gravity.START, 24, 16));
+        TextView status = text("Carregando conteúdo…", 16, TEXT, false, Gravity.START, 24, 24);
+        shell.addView(status);
+        TextView retry = button("TENTAR NOVAMENTE", DARK, WHITE, 48);
+        retry.setVisibility(View.GONE);
+        retry.setOnClickListener(v -> openFixedTriviaModule(moduleId, moduleTitle));
+        shell.addView(retry);
+        root.addView(shell, matchMatch());
+        // Every opening/reload reads the server; never display cached or local lessons.
+        DedilharteApiClient.service().getModules().enqueue(new Callback<LearningModuleListResponse>() {
+            @Override
+            public void onResponse(Call<LearningModuleListResponse> call, Response<LearningModuleListResponse> response) {
+                if (isDestroyed() || shell.getParent() != root) return;
+                if (!response.isSuccessful() || response.body() == null || response.body().items == null) {
+                    status.setText("Não foi possível carregar o conteúdo.");
+                    retry.setVisibility(View.VISIBLE);
+                    return;
+                }
+                for (LearningModuleResponse module : response.body().items) {
+                    if (module != null && module.active && moduleId.equals(module.id)) {
+                        showDynamicModule(module);
+                        return;
+                    }
+                }
+                status.setText("Módulo indisponível.");
+                retry.setVisibility(View.VISIBLE);
+            }
+
+            @Override
+            public void onFailure(Call<LearningModuleListResponse> call, Throwable t) {
+                if (isDestroyed() || shell.getParent() != root) return;
+                status.setText("Não foi possível carregar o conteúdo. Verifique sua conexão.");
+                retry.setVisibility(View.VISIBLE);
             }
         });
-    }
-
-    private LearningModuleResponse findDynamicModuleById(String moduleId) {
-        for (LearningModuleResponse module : dynamicModules) {
-            if (module == null || !module.active) {
-                continue;
-            }
-            if (moduleId.equals(module.id)) {
-                return module;
-            }
-        }
-        return null;
     }
 
     private void fetchDynamicModules(Runnable onFinished) {
         DedilharteApiClient.service().getModules().enqueue(new Callback<LearningModuleListResponse>() {
             @Override
             public void onResponse(Call<LearningModuleListResponse> call, Response<LearningModuleListResponse> response) {
+                dynamicModules.clear();
                 if (response.isSuccessful() && response.body() != null && response.body().items != null) {
-                    dynamicModules.clear();
                     dynamicModules.addAll(fixedTriviaModules(response.body().items));
                 }
                 if (onFinished != null) {
@@ -3575,6 +3625,7 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onFailure(Call<LearningModuleListResponse> call, Throwable t) {
+                dynamicModules.clear();
                 if (onFinished != null) {
                     onFinished.run();
                 }
@@ -3622,7 +3673,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        showDynamicModule(module);
+        openFixedTriviaModule(module.id, module.name);
     }
     private void showEditProfile() {
         final Dialog dialog = new Dialog(this);

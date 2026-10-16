@@ -47,8 +47,7 @@ public final class SongRepository {
 
     public List<Song> publishedQueued() {
         List<Song> result = new ArrayList<>();
-        List<Song> cachedPublic = readList(PUBLISHED_CACHE);
-        List<Song> source = cachedPublic.isEmpty() ? readAll() : cachedPublic;
+        List<Song> source = readList(PUBLISHED_CACHE);
         for (Song song : source) {
             if (Song.PUBLISHED.equals(song.getStatus()) && song.isInQueue()) {
                 result.add(song);
@@ -59,26 +58,26 @@ public final class SongRepository {
     }
 
     public void fetchPublishedQueued(SongListCallback callback) {
+        // Invalidate old public content before revalidation. Admin drafts are never a fallback.
+        writeList(PUBLISHED_CACHE, Collections.emptyList());
         api.getSongs().enqueue(new Callback<SongListResponse>() {
             @Override
             public void onResponse(Call<SongListResponse> call, Response<SongListResponse> response) {
-                List<Song> songs = response.isSuccessful()
+                boolean valid = response.isSuccessful()
                         && response.body() != null
-                        && response.body().items != null
-                        ? fromResponses(response.body().items)
-                        : publishedQueued();
-                if (response.isSuccessful()) {
-                    writeList(PUBLISHED_CACHE, songs);
-                }
+                        && response.body().items != null;
+                List<Song> songs = valid ? fromResponses(response.body().items) : Collections.emptyList();
+                writeList(PUBLISHED_CACHE, songs);
                 if (callback != null) {
-                    callback.onResult(songs, response.isSuccessful());
+                    callback.onResult(songs, valid);
                 }
             }
 
             @Override
             public void onFailure(Call<SongListResponse> call, Throwable t) {
+                writeList(PUBLISHED_CACHE, Collections.emptyList());
                 if (callback != null) {
-                    callback.onResult(publishedQueued(), false);
+                    callback.onResult(Collections.emptyList(), false);
                 }
             }
         });
@@ -88,23 +87,22 @@ public final class SongRepository {
         api.getAdminSongs().enqueue(new Callback<SongListResponse>() {
             @Override
             public void onResponse(Call<SongListResponse> call, Response<SongListResponse> response) {
-                List<Song> songs = response.isSuccessful()
+                boolean valid = response.isSuccessful()
                         && response.body() != null
-                        && response.body().items != null
-                        ? fromResponses(response.body().items)
-                        : all();
-                if (response.isSuccessful()) {
+                        && response.body().items != null;
+                List<Song> songs = valid ? fromResponses(response.body().items) : Collections.emptyList();
+                if (valid) {
                     writeAll(songs);
                 }
                 if (callback != null) {
-                    callback.onResult(songs, response.isSuccessful());
+                    callback.onResult(songs, valid);
                 }
             }
 
             @Override
             public void onFailure(Call<SongListResponse> call, Throwable t) {
                 if (callback != null) {
-                    callback.onResult(all(), false);
+                    callback.onResult(Collections.emptyList(), false);
                 }
             }
         });
@@ -119,53 +117,53 @@ public final class SongRepository {
         return null;
     }
 
-    public void save(Song song) {
-        List<Song> songs = readAll();
-        boolean replaced = false;
-        for (int i = 0; i < songs.size(); i++) {
-            if (songs.get(i).getId().equals(song.getId())) {
-                songs.set(i, song);
-                replaced = true;
-                break;
-            }
-        }
-        if (!replaced) {
-            songs.add(song);
-        }
-        writeAll(songs);
-        Call<SongResponse> call = replaced
-                ? api.updateSong(song.getId(), requestFromSong(song))
-                : api.createSong(requestFromSong(song));
+    public void save(Song song, OperationCallback callback) {
+        save(song, get(song.getId()) == null, (saved, error) -> callback.onComplete(saved != null));
+    }
+
+    public void save(Song song, boolean creating, SaveResultCallback callback) {
+        Call<SongResponse> call = creating
+                ? api.createSong(requestFromSong(song))
+                : api.updateSong(song.getId(), requestFromSong(song));
         call.enqueue(new Callback<SongResponse>() {
             @Override
             public void onResponse(Call<SongResponse> call, Response<SongResponse> response) {
+                List<Song> saved = response.isSuccessful() && response.body() != null
+                        ? fromResponses(Collections.singletonList(response.body())) : Collections.emptyList();
+                if (!saved.isEmpty()) writeList(PUBLISHED_CACHE, Collections.emptyList());
+                callback.onComplete(saved.isEmpty() ? null : saved.get(0),
+                        com.example.dedilharte.network.ApiErrors.message(response, "Não foi possível salvar a música."));
             }
 
             @Override
             public void onFailure(Call<SongResponse> call, Throwable t) {
+                callback.onComplete(null, "Falha de conexão. Tente novamente.");
             }
         });
     }
 
-    public void delete(String id) {
-        List<Song> songs = readAll();
-        for (int i = songs.size() - 1; i >= 0; i--) {
-            if (songs.get(i).getId().equals(id)) {
-                songs.remove(i);
-            }
-        }
-        writeAll(songs);
+    public interface SaveResultCallback {
+        void onComplete(Song saved, String error);
+    }
+
+    public void delete(String id, OperationCallback callback) {
         api.deleteSong(id).enqueue(new Callback<Void>() {
             @Override
             public void onResponse(Call<Void> call, Response<Void> response) {
+                if (response.isSuccessful()) writeList(PUBLISHED_CACHE, Collections.emptyList());
+                callback.onComplete(response.isSuccessful());
             }
 
             @Override
             public void onFailure(Call<Void> call, Throwable t) {
+                callback.onComplete(false);
             }
         });
     }
 
+    public interface OperationCallback {
+        void onComplete(boolean success);
+    }
     public int nextQueueOrder() {
         int max = 0;
         for (Song song : readAll()) {

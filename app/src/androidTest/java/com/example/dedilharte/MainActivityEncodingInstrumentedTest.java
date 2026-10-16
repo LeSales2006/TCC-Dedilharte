@@ -46,7 +46,9 @@ public class MainActivityEncodingInstrumentedTest {
             scenario.onActivity(activity -> {
                 String visibleText = collectText(activity.findViewById(R.id.root));
 
-                assertTrue(visibleText.contains("Ol\u00e1"));
+                assertTrue(visibleText.contains("Trivia"));
+                assertFalse(visibleText.contains("Conhecendo as cordas"));
+                assertFalse(visibleText.contains("CONTINUAR: AULA"));
                 assertFalse(visibleText.contains("\u00c3"));
                 assertFalse(visibleText.contains("\u00c2"));
                 assertFalse(visibleText.contains("\u00e2"));

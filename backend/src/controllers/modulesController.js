@@ -3,23 +3,7 @@ const pool = require('../db');
 
 const MODULE_TYPES = new Set(['trivia', 'exercises']);
 const ITEM_TYPES = new Set(['song', 'multiple_choice']);
-const FIXED_TRIVIA_MODULES = [
-  {
-    id: 'module_trivia_beginner',
-    name: 'Trivia Iniciante',
-    moduleType: 'trivia',
-    description: 'Perguntas iniciais de dedilhado.',
-    sortOrder: 1,
-  },
-  {
-    id: 'module_trivia_intermediate',
-    name: 'Trivia Intermediário',
-    moduleType: 'trivia',
-    description: 'Perguntas intermediárias de dedilhado.',
-    sortOrder: 2,
-  },
-];
-const FIXED_TRIVIA_IDS = new Set(FIXED_TRIVIA_MODULES.map((module) => module.id));
+const FIXED_TRIVIA_IDS = new Set(['module_trivia_beginner', 'module_trivia_intermediate']);
 
 function text(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -79,23 +63,6 @@ function toModule(row, items = []) {
   };
 }
 
-async function ensureFixedTriviaModules() {
-  for (const module of FIXED_TRIVIA_MODULES) {
-    await pool.query(
-      `INSERT INTO learning_modules (id, name, module_type, description, sort_order, active, updated_at)
-       VALUES ($1, $2, $3, $4, $5, TRUE, NOW())
-       ON CONFLICT (id) DO UPDATE
-       SET name = EXCLUDED.name,
-           module_type = EXCLUDED.module_type,
-           description = EXCLUDED.description,
-           sort_order = EXCLUDED.sort_order,
-           active = TRUE,
-           updated_at = NOW()`,
-      [module.id, module.name, module.moduleType, module.description, module.sortOrder]
-    );
-  }
-}
-
 function validateModule(body, partial = false) {
   const name = text(body.name);
   const moduleType = text(body.module_type || body.moduleType);
@@ -128,6 +95,10 @@ function validateItem(body, partial = false) {
   const title = text(body.title);
   const instructions = text(body.instructions);
   const sortOrder = int(body.sort_order ?? body.sortOrder, 0);
+  const suppliedOrder = body.sort_order !== undefined ? body.sort_order : body.sortOrder;
+  if (suppliedOrder !== undefined && (!Number.isInteger(suppliedOrder) || suppliedOrder < 0 || suppliedOrder > 2147483647)) {
+    return { error: 'Ordem deve ser um inteiro entre 0 e 2147483647.' };
+  }
   const active = bool(body.active, true);
   const question = text(body.question);
   const explanation = text(body.explanation);
@@ -139,7 +110,7 @@ function validateItem(body, partial = false) {
   if ((itemType === 'song' || (!partial && itemType === 'song')) && !songId) {
     return { error: 'song_id e obrigatorio para item song.' };
   }
-  if (itemType === 'multiple_choice' || (!partial && body.options !== undefined)) {
+  if (itemType === 'multiple_choice') {
     if (!question) return { error: 'question e obrigatoria.' };
     const parsed = validateOptions(body.options, correctIndex);
     if (parsed.error) return parsed;
@@ -161,7 +132,7 @@ function validateItem(body, partial = false) {
 
 async function listPublic(req, res, next) {
   try {
-    await ensureFixedTriviaModules();
+
     const moduleResult = await pool.query(
       `SELECT id, name, module_type, description, sort_order, active, created_by, created_at, updated_at
        FROM learning_modules
@@ -199,7 +170,7 @@ async function listPublic(req, res, next) {
 
 async function listStaff(req, res, next) {
   try {
-    await ensureFixedTriviaModules();
+
     const moduleResult = await pool.query(
       `SELECT id, name, module_type, description, sort_order, active, created_by, created_at, updated_at
        FROM learning_modules
@@ -260,6 +231,13 @@ async function createItem(req, res, next) {
     const payload = validateItem(req.body);
     if (payload.error) return res.status(400).json({ error: payload.error });
     await client.query('BEGIN');
+    if (payload.itemType === 'song') {
+      const song = await client.query('SELECT id FROM songs WHERE id = $1 FOR KEY SHARE', [payload.songId]);
+      if (song.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Música não encontrada. Selecione uma música cadastrada.' });
+      }
+    }
     const itemResult = await client.query(
       `INSERT INTO learning_module_items
        (id, module_id, item_type, song_id, title, instructions, sort_order, active, created_by, updated_at)
@@ -301,6 +279,13 @@ async function updateItem(req, res, next) {
     const payload = validateItem(req.body);
     if (payload.error) return res.status(400).json({ error: payload.error });
     await client.query('BEGIN');
+    if (payload.itemType === 'song') {
+      const song = await client.query('SELECT id FROM songs WHERE id = $1 FOR KEY SHARE', [payload.songId]);
+      if (song.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Música não encontrada. Selecione uma música cadastrada.' });
+      }
+    }
     const itemResult = await client.query(
       `UPDATE learning_module_items
        SET item_type = $2, song_id = $3, title = $4, instructions = $5,

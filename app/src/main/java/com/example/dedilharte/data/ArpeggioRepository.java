@@ -34,12 +34,8 @@ public final class ArpeggioRepository {
         api = DedilharteApiClient.service();
     }
 
-    public List<ArpeggioResponse> cachedOrFallback() {
-        List<ArpeggioResponse> cached = readCache();
-        return cached.isEmpty() ? fallback() : cached;
-    }
-
     public void fetchPublic(ArpeggioListCallback callback) {
+        writeCache(new ArrayList<>());
         api.getArpeggios().enqueue(listCallback(callback, true));
     }
 
@@ -90,21 +86,19 @@ public final class ArpeggioRepository {
                         && response.body().items != null
                         ? response.body().items
                         : null;
-                List<ArpeggioResponse> items = received == null || received.isEmpty()
-                        ? cachedOrFallback()
-                        : received;
-                if (updateCache && response.isSuccessful()) {
+                List<ArpeggioResponse> items = received == null ? new ArrayList<>() : received;
+                if (updateCache) {
                     writeCache(items);
                 }
                 if (callback != null) {
-                    callback.onResult(items, response.isSuccessful());
+                    callback.onResult(items, received != null);
                 }
             }
 
             @Override
             public void onFailure(Call<ArpeggioListResponse> call, Throwable t) {
                 if (callback != null) {
-                    callback.onResult(cachedOrFallback(), false);
+                    callback.onResult(new ArrayList<>(), false);
                 }
             }
         };
@@ -195,32 +189,6 @@ public final class ArpeggioRepository {
         if (changed) {
             writeCache(items);
         }
-    }
-
-    private List<ArpeggioResponse> fallback() {
-        List<ArpeggioResponse> items = new ArrayList<>();
-        items.add(arpeggio("arp_c_major", "Dó maior (C)", "C", 1, new int[][]{{5, 3}, {3, 0}, {2, 1}, {1, 0}}));
-        items.add(arpeggio("arp_d_major", "Ré maior (D)", "D", 2, new int[][]{{4, 0}, {3, 2}, {2, 3}, {1, 2}}));
-        items.add(arpeggio("arp_e_major", "Mi maior (E)", "E", 3, new int[][]{{6, 0}, {3, 1}, {2, 0}, {1, 0}}));
-        items.add(arpeggio("arp_f_major", "Fá maior (F)", "F", 4, new int[][]{{6, 1}, {3, 2}, {2, 1}, {1, 1}}));
-        items.add(arpeggio("arp_g_major", "Sol maior (G)", "G", 5, new int[][]{{6, 3}, {3, 0}, {2, 0}, {1, 3}}));
-        items.add(arpeggio("arp_a_major", "Lá maior (A)", "A", 6, new int[][]{{5, 0}, {3, 2}, {2, 2}, {1, 0}}));
-        items.add(arpeggio("arp_b_major", "Si maior (B)", "B", 7, new int[][]{{5, 2}, {3, 4}, {2, 4}, {1, 2}}));
-        return items;
-    }
-
-    private ArpeggioResponse arpeggio(String id, String title, String chord, int sortOrder, int[][] notes) {
-        ArpeggioResponse arpeggio = new ArpeggioResponse();
-        arpeggio.id = id;
-        arpeggio.title = title;
-        arpeggio.chord = chord;
-        arpeggio.difficulty = Song.EASY;
-        arpeggio.active = true;
-        arpeggio.sortOrder = sortOrder;
-        for (int[] note : notes) {
-            arpeggio.notes.add(new ArpeggioNote(note[0], note[1]));
-        }
-        return arpeggio;
     }
 
     private boolean isBlank(String value) {

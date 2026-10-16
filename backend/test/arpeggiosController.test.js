@@ -78,13 +78,9 @@ test('deleteAdmin aborta sem query quando ID esta ausente', async () => {
 });
 
 test('listAdmin consulta somente arpejos ativos', async () => {
-  let call = 0;
+
   pool.query = async (sql) => {
     assert.match(sql, /WHERE active = TRUE/);
-    call++;
-    if (call === 1) {
-      return { rowCount: 1, rows: [{ total: 2 }] };
-    }
     return {
       rowCount: 2,
       rows: [
@@ -100,43 +96,17 @@ test('listAdmin consulta somente arpejos ativos', async () => {
   assert.deepEqual(res.body.items.map((item) => item.id), ['arp_1', 'arp_3']);
 });
 
-test('listAdmin restaura arpejos padrao quando nao ha nenhum ativo', async () => {
-  const upsertedIds = [];
-  let selectCalled = false;
-
-  pool.query = async (sql, params) => {
-    if (sql.startsWith('SELECT COUNT')) {
-      return { rowCount: 1, rows: [{ total: 0 }] };
-    }
-    if (sql.startsWith('INSERT INTO arpeggios')) {
-      upsertedIds.push(params[0]);
-      assert.match(sql, /ON CONFLICT \(id\) DO UPDATE/);
-      assert.match(sql, /active = TRUE/);
-      return { rowCount: 1, rows: [] };
-    }
-    if (sql.includes('SELECT id, title')) {
-      selectCalled = true;
-      assert.match(sql, /WHERE active = TRUE/);
-      return {
-        rowCount: 7,
-        rows: upsertedIds.map((id, index) => ({
-          id,
-          title: id,
-          chord: '',
-          notes: [],
-          difficulty: 'easy',
-          active: true,
-          sort_order: index + 1,
-        })),
-      };
-    }
-    throw new Error(`Query inesperada: ${sql}`);
-  };
-
-  const res = await run(arpeggiosController.listAdmin, { params: {} });
-
-  assert.equal(selectCalled, true);
-  assert.equal(upsertedIds.length, 7);
-  assert.equal(res.statusCode, 200);
-  assert.equal(res.body.items.length, 7);
-});
+for (const handler of [arpeggiosController.listPublic, arpeggiosController.listAdmin]) {
+  test(`${handler.name} retorna vazio sem criar ou reativar arpejos`, async () => {
+    let calls = 0;
+    pool.query = async sql => {
+      calls++;
+      assert.match(sql, /^SELECT /);
+      assert.match(sql, /FROM arpeggios/);
+      return { rowCount: 0, rows: [] };
+    };
+    const res = await run(handler, {});
+    assert.deepEqual(res.body.items, []);
+    assert.equal(calls, 1);
+  });
+}
