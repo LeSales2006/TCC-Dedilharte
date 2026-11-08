@@ -1,8 +1,8 @@
-# Correções locais — 04/11/2026 e continuação em 07/11/2026
+# Correções locais — 04/11/2026, 07/11/2026 e 08/11/2026
 
 As seções iniciais preservam o registro de 04/11. Os resultados novos estão em
-“Continuação — 07/11/2026” e “Áudio local — 07/11/2026”; as pendências ao final
-refletem a situação atual.
+“Continuação — 07/11/2026”, “Áudio local — 07/11/2026” e
+“Navegação das Trivias — 08/11/2026”; as pendências ao final refletem a situação atual.
 
 ## Causas e correções
 
@@ -144,6 +144,62 @@ Alterações anteriores de telas, áudio e outros recursos foram preservadas.
   `assets/audio_sources.txt`, testes `audio/GuitarSoundPlayerInstrumentedTest.java`
   e `audio/GuitarSampleAudioInstrumentedTest.java`, além deste relatório.
 - APK: `app/build/outputs/apk/debug/app-debug.apk`.
+
+## Navegação das Trivias — 08/11/2026
+
+- Identificados os fluxos locais `showLevelChoice()` → `showCourse()` →
+  `LessonRepository`, e o fluxo remoto `openFixedTriviaModule()` → `getModules()`
+  → `showDynamicModule()`. A navegação do aluno agora usa exclusivamente os
+  módulos `module_trivia_beginner` e `module_trivia_intermediate` da API REST.
+- Retiradas a seleção antiga de nível, a listagem local de aulas, o atalho
+  `VER AULAS`, a retomada de aulas locais e a restauração dessas telas ao recriar
+  a Activity. Os métodos antigos de entrada ficaram como redirecionamentos:
+  `showLevelChoice()` abre Seu progresso e `showCourse()` abre a Trivia remota
+  correspondente. `LessonRepository`, seus IDs e os dados de progresso foram
+  preservados para compatibilidade e sincronização existentes.
+- Seu progresso passou a oferecer os dois atalhos remotos e o menu principal.
+  O resumo/reset das aulas locais saiu dessa tela; o progresso remoto continua
+  disponível em cada Trivia, carregado por `getModuleProgress()`. Não houve
+  reset ou conversão dos registros existentes.
+- Menus, troca de trilha, retornos de telas auxiliares e Voltar deixam de abrir
+  o catálogo local. O treino de um item remoto continua voltando à prévia desse
+  mesmo item; a prévia volta ao módulo da API. A falha/ausência de conteúdo na API
+  mantém a mensagem de erro/indisponibilidade, sem substituir por aulas locais.
+- Aluno inicia em Seu progresso; administrador inicia no Painel administrativo.
+  Visualizar app como aluno abre Seu progresso e Voltar retorna ao painel.
+  Para o aluno, Voltar na raiz encerra a Activity.
+- Código de exercícios, tablaturas, áudio, conclusão remota e IDs dos módulos
+  preservado. Alterações preexistentes na gestão de músicas foram mantidas.
+  Nenhum arquivo de backend/migration foi alterado e nenhum registro do banco
+  foi consultado ou modificado nesta etapa. Sem push.
+
+### Arquivos e verificação
+
+- Produção: `app/src/main/java/com/example/dedilharte/MainActivity.java`.
+- Testes: `MainActivityEncodingInstrumentedTest.java`, `HomeInstrumentedTest.java`
+  e novo `TriviaNavigationInstrumentedTest.java`, em
+  `app/src/androidTest/java/com/example/dedilharte/`.
+- Documentação: este relatório.
+- **26 testes unitários aprovados**. **18 cenários instrumentados validados**:
+  17 passaram na suíte inicial; o cenário de menu falhou por seleção de uma
+  janela sem foco no Espresso. Após especificar `isDialog()` no teste, esse
+  cenário passou isoladamente, incluindo clique nas duas Trivias.
+- Cobertura: atalhos, menu sem entradas locais, troca entre módulos, progresso
+  retornado pela API, prévia/treino/retorno, aluno/administrador, recriação da
+  Activity, preservação de progresso antigo e ausência de fallback quando
+  offline ou sem módulo. Usada API simulada em todos esses testes.
+- Instrumentação executada no emulador com application ID temporário
+  `com.example.dedilharte.navigationtest`, separado do app do usuário. Os dois
+  pacotes temporários foram removidos ao final. O celular conectado e os dados
+  do app original não foram alterados.
+- Build com JDK 21: `assembleDebug`, `assembleDebugAndroidTest`,
+  `testDebugUnitTest` e `lintDebug` aprovados; lint com **0 erros, 159 avisos**.
+  Referências revisadas e `git diff --check` aprovado.
+- Evidências: `build/trivia-navigation-instrumentation.log`,
+  `build/trivia-navigation-drawer.log`, `build/trivia-navigation-final-gradle.log`
+  e `build/trivia-navigation-final-package.log`.
+- APK final: `app/build/outputs/apk/debug/app-debug.apk`, com application ID
+  original `com.example.dedilharte`.
 
 ## Pendências atualizadas — 07/11/2026
 

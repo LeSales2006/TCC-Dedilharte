@@ -58,6 +58,8 @@ public class HomeInstrumentedTest extends MainActivityEncodingInstrumentedTest {
             try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
                 scenario.onActivity(activity -> {
                     View root = activity.findViewById(R.id.root);
+                    assertTrue(text(root).contains("Seu progresso"));
+                    home(activity);
                     assertTrue(text(root).contains("Continuar de onde parou"));
                     assertTrue(text(root).contains(song.title));
                     assertFalse(text(root).contains("CONTINUAR LIÇÃO"));
@@ -72,6 +74,8 @@ public class HomeInstrumentedTest extends MainActivityEncodingInstrumentedTest {
                     assertFalse(text(root).contains("intermediate-first"));
                     tap(root, "TRIVIA INICIANTE"); // Browsing another trivia must not replace the bookmark.
                     activity.getOnBackPressedDispatcher().onBackPressed();
+                    assertTrue(text(root).contains("Seu progresso"));
+                    home(activity);
                     assertTrue(text(root).contains(last.title));
                     tap(root, "Praticar música: " + song.title);
                     assertTrue(text(root).contains("Tocar música"));
@@ -85,6 +89,7 @@ public class HomeInstrumentedTest extends MainActivityEncodingInstrumentedTest {
             }
             try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
                 scenario.onActivity(activity -> {
+                    home(activity);
                     View root = activity.findViewById(R.id.root);
                     assertTrue(text(root).contains(last.title));
                     assertTrue(text(root).contains("Trivia Intermediário"));

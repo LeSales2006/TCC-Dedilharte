@@ -230,7 +230,7 @@ public class MainActivity extends AppCompatActivity {
     private LearningModuleResponse currentModule;
     private LearningModuleItemResponse currentModuleItem;
     private Screen screen = Screen.WELCOME;
-    private Screen practiceReturnScreen = Screen.COURSE;
+    private Screen practiceReturnScreen = Screen.PROGRESS;
     private String currentUserId = "";
     private String userName = "";
     private String level = LessonRepository.BEGINNER;
@@ -291,10 +291,6 @@ public class MainActivity extends AppCompatActivity {
                 level = restoredLevel;
             }
             courseLevel = savedInstanceState.getString("course_level", level);
-            String lessonId = savedInstanceState.getString("lesson_id");
-            if (lessonId != null) {
-                currentLesson = LessonRepository.getById(lessonId);
-            }
         }
 
         if (currentUserId.trim().isEmpty()) {
@@ -307,17 +303,7 @@ public class MainActivity extends AppCompatActivity {
             showAdminDashboard();
         } else {
             synchronizeCurrentUser(false);
-            String restoredScreen = savedInstanceState == null ? "" : savedInstanceState.getString("screen", "");
-            if (currentLesson != null && Screen.PRACTICE.name().equals(restoredScreen)) {
-                showPractice(currentLesson.getTitle(), currentLesson.getChord(), currentLesson.getPattern(),
-                        currentLesson.getBpm(), currentLesson, Screen.LESSON);
-            } else if (currentLesson != null && Screen.LESSON.name().equals(restoredScreen)) {
-                showLessonDetail(currentLesson);
-            } else if (Screen.COURSE.name().equals(restoredScreen)) {
-                showCourse(courseLevel);
-            } else {
-                showHome();
-            }
+            showProgress();
         }
     }
 
@@ -536,7 +522,7 @@ public class MainActivity extends AppCompatActivity {
             if (screen == Screen.PROGRESS) {
                 showProgress();
             } else if (screen == Screen.COURSE) {
-                showCourse(courseLevel);
+                showProgress();
             }
         });
     }
@@ -577,7 +563,7 @@ public class MainActivity extends AppCompatActivity {
         if (screen == Screen.PROGRESS) {
             showProgress();
         } else if (screen == Screen.COURSE) {
-            showCourse(courseLevel);
+            showProgress();
         }
     }
 
@@ -650,7 +636,7 @@ public class MainActivity extends AppCompatActivity {
         } else if (isAdmin()) {
             showAdminDashboard();
         } else {
-            showLevelChoice();
+            showProgress();
         }
     }
 
@@ -791,102 +777,23 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             createAccount(typed, false);
-            showLevelChoice();
+            showProgress();
         });
         page.addView(continueButton, matchWrap(0, 0));
         root.addView(page, matchMatch());
     }
 
+    // Compatibility entry points: legacy navigation must never render local lessons.
     private void showLevelChoice() {
-        stopPractice();
-        screen = Screen.LEVEL;
-        currentLesson = null;
-        currentModule = null;
-        currentModuleItem = null;
-        root.removeAllViews();
-
-        LinearLayout page = column(TEAL, Gravity.CENTER);
-        page.setPadding(dp(32), dp(24), dp(32), dp(24));
-        page.addView(logo(164));
-        page.addView(text("Dedilharte", 29, WHITE, true, Gravity.CENTER, 4, 54));
-        page.addView(text(
-                firstName() + ", qual é o seu nível atual?",
-                21, WHITE, true, Gravity.CENTER, 0, 10
-        ));
-        page.addView(text(
-                "Você poderá trocar de trilha a qualquer momento.",
-                15, WHITE, false, Gravity.CENTER, 0, 30
-        ));
-
-        TextView beginner = button("INICIANTE", CYAN, WHITE, 64);
-        beginner.setOnClickListener(v -> chooseLevel(LessonRepository.BEGINNER));
-        page.addView(beginner, matchWrap(0, 16));
-
-        TextView intermediate = button("INTERMEDIÁRIO", WHITE, DARK, 64);
-        intermediate.setOnClickListener(v -> chooseLevel(LessonRepository.INTERMEDIATE));
-        page.addView(intermediate, matchWrap(0, 0));
-        root.addView(page, matchMatch());
-    }
-
-    private void chooseLevel(String selectedLevel) {
-        level = selectedLevel;
-        saveActiveProfile();
-        showCourse(selectedLevel);
+        showProgress();
     }
 
     private void showCourse(String selectedLevel) {
-        stopPractice();
-        screen = Screen.COURSE;
-        currentLesson = null;
-        currentModule = null;
-        currentModuleItem = null;
-        courseLevel = selectedLevel;
-        level = selectedLevel;
-        saveActiveProfile();
-        root.removeAllViews();
-
-        LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(mainHeader(), new LinearLayout.LayoutParams(-1, dp(72)));
-
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
-        LinearLayout content = column(WHITE, Gravity.TOP);
-        content.setPadding(dp(24), dp(24), dp(24), dp(32));
-
-        content.addView(text("Olá, " + firstName() + "!", 18, TEAL, true, Gravity.START, 0, 6));
-        content.addView(text("Trilha " + selectedLevel, 30, DARK, true, Gravity.START, 0, 8));
-        content.addView(text(
-                selectedLevel.equals(LessonRepository.BEGINNER)
-                        ? "Comece pelas cordas e avance até seu primeiro acompanhamento completo."
-                        : "Desenvolva coordenação, variações rítmicas e arpejos mais completos.",
-                15, TEXT, false, Gravity.START, 0, 18
-        ));
-        content.addView(trackSwitchPanel(selectedLevel), matchWrap(0, 18));
-
-        List<Lesson> lessons = LessonRepository.getLessons(selectedLevel);
-        content.addView(progressPanel(progressStore.completedCount(lessons), lessons.size(),
-                progressStore.progressPercent(lessons)), matchWrap(0, 18));
-
-        Lesson next = firstIncomplete(lessons);
-        if (next != null) {
-            TextView continueButton = button("CONTINUAR: AULA " + next.getOrder(), DARK, WHITE, 58);
-            continueButton.setOnClickListener(v -> showLessonDetail(next));
-            content.addView(continueButton, matchWrap(0, 24));
+        if (LessonRepository.INTERMEDIATE.equals(selectedLevel)) {
+            openFixedTriviaModule(MODULE_TRIVIA_INTERMEDIATE, "Trivia Intermediário");
+        } else {
+            openFixedTriviaModule(MODULE_TRIVIA_BEGINNER, "Trivia Iniciante");
         }
-
-        content.addView(text(
-                selectedLevel.equals(LessonRepository.INTERMEDIATE) ? "Exercícios intermediários" : "Aulas",
-                22, DARK, true, Gravity.START, 0, 12
-        ));
-        for (Lesson lesson : lessons) {
-            TextView card = lessonCard(lesson);
-            card.setOnClickListener(v -> showLessonDetail(lesson));
-            content.addView(card, matchWrap(0, 14));
-        }
-
-        scroll.addView(content);
-        shell.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-        root.addView(shell, matchMatch());
     }
 
     private void showHome() {
@@ -920,9 +827,6 @@ public class MainActivity extends AppCompatActivity {
         TextView intermediate = button("TRIVIA INTERMEDIÁRIO", DARK, WHITE, 52);
         intermediate.setOnClickListener(v -> openFixedTriviaModule(MODULE_TRIVIA_INTERMEDIATE, "Trivia Intermediário"));
         content.addView(intermediate, matchWrap(0, 12));
-        TextView lessons = button("VER AULAS", SOFT, DARK, 52);
-        lessons.setOnClickListener(v -> showLevelChoice());
-        content.addView(lessons, matchWrap(0, 12));
         TextView refresh = button("ATUALIZAR", SOFT, DARK, 48);
         refresh.setOnClickListener(v -> showHome());
         content.addView(refresh, matchWrap(0, 0));
@@ -959,13 +863,8 @@ public class MainActivity extends AppCompatActivity {
             resume.addView(infoCard("Sua próxima lição", "Escolha uma trivia ou uma aula para começar."));
             return;
         }
-        if (moduleId.isEmpty()) {
-            Lesson lesson = LessonRepository.getById(lessonId);
-            if (lesson != null) {
-                renderHomeResume(resume, lesson.getTitle(), "Aulas • " + lesson.getLevel(), () -> showLessonDetail(lesson));
-            } else {
-                resume.addView(infoCard("Lição indisponível", "A última lição acessada não está mais disponível."));
-            }
+        if (!MODULE_TRIVIA_BEGINNER.equals(moduleId) && !MODULE_TRIVIA_INTERMEDIATE.equals(moduleId)) {
+            resume.addView(infoCard("Sua próxima lição", "Escolha uma Trivia para continuar."));
             return;
         }
         resume.addView(text("Carregando sua última lição…", 16, TEXT, false, Gravity.START, 0, 12));
@@ -1023,11 +922,7 @@ public class MainActivity extends AppCompatActivity {
         TextView beginner = button("INICIANTE", beginnerSelected ? DARK : WHITE, beginnerSelected ? WHITE : DARK, 48);
         beginner.setOnClickListener(v -> {
             if (!beginnerSelected) {
-                if (screen == Screen.MODULE) {
-                    openFixedTriviaModule(MODULE_TRIVIA_BEGINNER, "Trivia Iniciante");
-                } else {
-                    chooseLevel(LessonRepository.BEGINNER);
-                }
+                openFixedTriviaModule(MODULE_TRIVIA_BEGINNER, "Trivia Iniciante");
             }
         });
 
@@ -1035,11 +930,7 @@ public class MainActivity extends AppCompatActivity {
         TextView intermediate = button("INTERMEDIÁRIO", intermediateSelected ? DARK : WHITE, intermediateSelected ? WHITE : DARK, 48);
         intermediate.setOnClickListener(v -> {
             if (!intermediateSelected) {
-                if (screen == Screen.MODULE) {
-                    openFixedTriviaModule(MODULE_TRIVIA_INTERMEDIATE, "Trivia Intermediário");
-                } else {
-                    chooseLevel(LessonRepository.INTERMEDIATE);
-                }
+                openFixedTriviaModule(MODULE_TRIVIA_INTERMEDIATE, "Trivia Intermediário");
             }
         });
 
@@ -1564,7 +1455,7 @@ public class MainActivity extends AppCompatActivity {
         if (practiceReturnScreen == Screen.MODULE_PREVIEW && currentModule != null && currentModuleItem != null) {
             showModulePreview(currentModule, currentModuleItem);
         } else if (practiceReturnScreen == Screen.LESSON && currentLesson != null) {
-            showLessonDetail(currentLesson);
+            showCourse(currentLesson.getLevel());
         } else if (practiceReturnScreen == Screen.ARPEGGIOS) {
             showArpeggios();
         } else if (practiceReturnScreen == Screen.SONGS) {
@@ -1572,7 +1463,7 @@ public class MainActivity extends AppCompatActivity {
         } else if (practiceReturnScreen == Screen.HOME) {
             showHome();
         } else {
-            showCourse(courseLevel);
+            showProgress();
         }
     }
 
@@ -1583,7 +1474,7 @@ public class MainActivity extends AppCompatActivity {
         root.removeAllViews();
 
         LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(pageHeader("Arpejos", this::showHome),
+        shell.addView(pageHeader("Arpejos", this::showProgress),
                 new LinearLayout.LayoutParams(-1, dp(72)));
 
         ScrollView scroll = new ScrollView(this);
@@ -1811,7 +1702,7 @@ public class MainActivity extends AppCompatActivity {
         root.removeAllViews();
 
         LinearLayout shell = column(TEAL, Gravity.TOP);
-        shell.addView(pageHeader("Repertório", this::showHome),
+        shell.addView(pageHeader("Repertório", this::showProgress),
                 new LinearLayout.LayoutParams(-1, dp(72)));
 
         LinearLayout content = column(TEAL, Gravity.TOP);
@@ -1906,7 +1797,7 @@ public class MainActivity extends AppCompatActivity {
     private void showAdminDashboard() {
         stopPractice();
         if (!isAdmin()) {
-            showCourse(courseLevel);
+            showProgress();
             return;
         }
         screen = Screen.ADMIN_PANEL;
@@ -1914,7 +1805,7 @@ public class MainActivity extends AppCompatActivity {
         root.removeAllViews();
 
         LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(pageHeader("Painel administrativo", () -> showCourse(courseLevel)),
+        shell.addView(pageHeader("Painel administrativo", this::showProgress),
                 new LinearLayout.LayoutParams(-1, dp(72)));
 
         ScrollView scroll = new ScrollView(this);
@@ -1935,7 +1826,7 @@ public class MainActivity extends AppCompatActivity {
         content.addView(trivia, matchWrap(0, 12));
 
         TextView student = button("Visualizar app como aluno", SOFT, DARK, 54);
-        student.setOnClickListener(v -> showHome());
+        student.setOnClickListener(v -> showProgress());
         content.addView(student, matchWrap(0, 12));
 
         TextView settings = button("Configurações", SOFT, DARK, 54);
@@ -1950,7 +1841,7 @@ public class MainActivity extends AppCompatActivity {
     private void showConfiguratorDashboard() {
         stopPractice();
         if (!isConfigurator()) {
-            showCourse(courseLevel);
+            showProgress();
             return;
         }
         screen = Screen.CONFIGURATOR_PANEL;
@@ -1958,7 +1849,7 @@ public class MainActivity extends AppCompatActivity {
         root.removeAllViews();
 
         LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(pageHeader("Painel configurador", () -> showCourse(courseLevel)),
+        shell.addView(pageHeader("Painel configurador", this::showProgress),
                 new LinearLayout.LayoutParams(-1, dp(72)));
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
@@ -1981,7 +1872,7 @@ public class MainActivity extends AppCompatActivity {
     private void showAdminModules() {
         stopPractice();
         if (!isAdmin()) {
-            showCourse(courseLevel);
+            showProgress();
             return;
         }
         screen = Screen.ADMIN_MODULES;
@@ -2065,7 +1956,7 @@ public class MainActivity extends AppCompatActivity {
     private void showAdminModuleItems(LearningModuleResponse module) {
         stopPractice();
         if (!isAdmin()) {
-            showCourse(courseLevel);
+            showProgress();
             return;
         }
         screen = Screen.ADMIN_MODULE_ITEMS;
@@ -2166,7 +2057,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void showModuleMultipleChoiceEditor(LearningModuleResponse module, LearningModuleItemResponse existing) {
         if (!isAdmin()) {
-            showCourse(courseLevel);
+            showProgress();
             return;
         }
         screen = Screen.ADMIN_MODULE_ITEM_EDITOR;
@@ -2238,7 +2129,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showModuleSongItemEditor(LearningModuleResponse module, LearningModuleItemResponse existing, ModuleSongDraft draft) {
-        if (!isAdmin()) { showCourse(courseLevel); return; }
+        if (!isAdmin()) { showProgress(); return; }
         screen = Screen.ADMIN_MODULE_ITEM_EDITOR;
         root.removeAllViews();
         LinearLayout shell = column(WHITE, Gravity.TOP);
@@ -2484,7 +2375,7 @@ public class MainActivity extends AppCompatActivity {
     private void showAdminSongs() {
         stopPractice();
         if (!isAdmin()) {
-            showCourse(courseLevel);
+            showProgress();
             return;
         }
         screen = Screen.ADMIN_SONGS;
@@ -2606,19 +2497,19 @@ public class MainActivity extends AppCompatActivity {
             row1.addView(publish, weightButton(5, 0));
             card.addView(row1, matchWrap(8, 8));
 
+
             LinearLayout row2 = new LinearLayout(this);
             row2.setOrientation(LinearLayout.HORIZONTAL);
-            row2.setWeightSum(4f);
+            row2.setWeightSum(2f);
+
             TextView up = button("SUBIR", SOFT, DARK, 42);
             TextView down = button("DESCER", SOFT, DARK, 42);
-            TextView queue = button(song.isActive() ? "REMOVER FILA" : "ADICIONAR FILA", SOFT, DARK, 42);
-            queue.setTextSize(12);
+
             row2.addView(up, weightButton(0, 4));
-            row2.addView(down, weightButton(4, 4));
-            LinearLayout.LayoutParams queueParams = new LinearLayout.LayoutParams(0, dp(42), 2f);
-            queueParams.setMargins(dp(4), 0, 0, 0);
-            row2.addView(queue, queueParams);
+            row2.addView(down, weightButton(4, 0));
+
             card.addView(row2, matchWrap(0, 8));
+
 
             LinearLayout row3 = new LinearLayout(this);
             row3.setOrientation(LinearLayout.HORIZONTAL);
@@ -2636,23 +2527,32 @@ public class MainActivity extends AppCompatActivity {
             up.setOnClickListener(v -> {
                 saveSongAndReload(song.withQueue(Math.max(0, song.getQueueOrder() - 1), song.isInQueue()));
             });
+
             down.setOnClickListener(v -> {
-                saveSongAndReload(song.withQueue(song.getQueueOrder() + 1, song.isInQueue()));
+                saveSongAndReload(song.withQueue(
+                        song.getQueueOrder() + 1,
+                        song.isInQueue()
+                ));
             });
-            queue.setOnClickListener(v -> {
-                saveSongAndReload(song.withActive(!song.isActive()));
-            });
+
             archive.setOnClickListener(v -> {
                 saveSongAndReload(song.withActive(!song.isActive()));
             });
+
             delete.setOnClickListener(v -> confirmDeleteSong(song));
+
             results.addView(card, matchWrap(0, 12));
             shown++;
         }
+
         if (shown == 0) {
-            results.addView(text("Nenhuma musica encontrada.", 16, TEXT, false, Gravity.CENTER, 24, 0));
+            results.addView(text(
+                    "Nenhuma musica encontrada.",
+                    16, TEXT, false, Gravity.CENTER, 24, 0
+            ));
         }
     }
+
 
     private void saveSongAndReload(Song song) {
         songRepository.save(song, this::onSongOperationComplete);
@@ -2685,7 +2585,7 @@ public class MainActivity extends AppCompatActivity {
     private void showAdminArpeggios() {
         stopPractice();
         if (!isAdmin()) {
-            showCourse(courseLevel);
+            showProgress();
             return;
         }
         screen = Screen.ADMIN_ARPEGGIOS;
@@ -2774,7 +2674,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void showArpeggioEditor(ArpeggioResponse existing) {
         if (!isAdmin()) {
-            showCourse(courseLevel);
+            showProgress();
             return;
         }
         screen = Screen.ADMIN_ARPEGGIO_EDITOR;
@@ -2896,7 +2796,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void showSongEditor(Song song, Runnable onBack, java.util.function.Consumer<Song> onSaved) {
         if (!isAdmin()) {
-            showCourse(courseLevel);
+            showProgress();
             return;
         }
         screen = Screen.ADMIN_EDITOR;
@@ -3067,90 +2967,14 @@ public class MainActivity extends AppCompatActivity {
         stopPractice();
         screen = Screen.PROGRESS;
         currentLesson = null;
+        currentModule = null;
+        currentModuleItem = null;
         root.removeAllViews();
-        if (System.currentTimeMillis() >= 0) {
-            showProgressDashboard();
-            return;
-        }
-
-        LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(pageHeader("Progresso", this::showHome),
-                new LinearLayout.LayoutParams(-1, dp(72)));
-
-        ScrollView scroll = new ScrollView(this);
-        LinearLayout content = column(WHITE, Gravity.TOP);
-        content.setPadding(dp(24), dp(24), dp(24), dp(32));
-        content.addView(text("Sua evolução", 29, DARK, true, Gravity.START, 0, 7));
-        content.addView(text(
-                "O progresso fica salvo neste aparelho e funciona sem internet.",
-                15, TEXT, false, Gravity.START, 0, 24
-        ));
-
-        addLevelProgress(content, LessonRepository.BEGINNER);
-        addLevelProgress(content, LessonRepository.INTERMEDIATE);
-
-        content.addView(text("Aulas concluídas", 21, DARK, true, Gravity.START, 12, 10));
-        boolean anyCompleted = false;
-        for (Lesson lesson : LessonRepository.getAll()) {
-            if (progressStore.isCompleted(lesson.getId())) {
-                anyCompleted = true;
-                TextView completed = text(
-                        "✓  " + lesson.getLevel() + " • Aula " + lesson.getOrder() + "\n    " + lesson.getTitle(),
-                        15, DARK, true, Gravity.START, 0, 0
-                );
-                completed.setPadding(dp(14), dp(12), dp(14), dp(12));
-                completed.setBackground(roundRect(SOFT, 14));
-                completed.setOnClickListener(v -> showLessonDetail(lesson));
-                content.addView(completed, matchWrap(0, 9));
-            }
-        }
-        if (!anyCompleted) {
-            content.addView(text(
-                    "Conclua uma aula para vê-la aqui.",
-                    15, TEXT, false, Gravity.START, 0, 16
-            ));
-        }
-
-        TextView restore = button("RESTAURAR PROGRESSO INICIAL", WHITE, TEAL, 56);
-        restore.setBackground(pressable(WHITE, SOFT, 16, TEAL));
-        restore.setOnClickListener(v -> new AlertDialog.Builder(this)
-                .setTitle("Restaurar progresso?")
-                .setMessage("As conclusões serão removidas e apenas a primeira aula ficará concluída, como no protótipo original.")
-                .setNegativeButton("Cancelar", null)
-                .setPositiveButton("Restaurar", (dialog, which) -> {
-                    progressStore.restoreInitialState();
-                    syncAllProgress(true);
-                    showProgress();
-                })
-                .show());
-        content.addView(restore, matchWrap(18, 0));
-
-        scroll.addView(content);
-        shell.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-        root.addView(shell, matchMatch());
+        showProgressDashboard();
     }
-
-    private void addLevelProgress(LinearLayout content, String selectedLevel) {
-        List<Lesson> lessons = LessonRepository.getLessons(selectedLevel);
-        int completed = progressStore.completedCount(lessons);
-        int percent = progressStore.progressPercent(lessons);
-        LinearLayout card = column(SOFT, Gravity.TOP);
-        card.setPadding(dp(16), dp(15), dp(16), dp(15));
-        card.setBackground(roundRect(SOFT, 16));
-        card.addView(text(selectedLevel, 18, DARK, true, Gravity.START, 0, 5));
-        card.addView(text(
-                completed + " de " + lessons.size() + " aulas",
-                14, TEXT, false, Gravity.START, 0, 9
-        ));
-        card.addView(horizontalProgress(percent), new LinearLayout.LayoutParams(-1, dp(13)));
-        card.addView(text(percent + "%", 13, TEAL, true, Gravity.END, 6, 0));
-        card.setOnClickListener(v -> showCourse(selectedLevel));
-        content.addView(card, matchWrap(0, 14));
-    }
-
     private void showProgressDashboard() {
         LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(pageHeader("Seu progresso", this::showHome),
+        shell.addView(mainHeader(),
                 new LinearLayout.LayoutParams(-1, dp(72)));
 
         ScrollView scroll = new ScrollView(this);
@@ -3201,29 +3025,15 @@ public class MainActivity extends AppCompatActivity {
                 learnedSongs + "\nFáceis: " + easySongs + "\nMédias: " + mediumSongs + "\nDifíceis: " + hardSongs
         ), matchWrap(0, 16));
 
-        int completedLessons = progressStore.completedCount(LessonRepository.getAll());
-        int totalLessons = LessonRepository.getAll().size();
-        int lessonPercent = progressStore.progressPercent(LessonRepository.getAll());
-        content.addView(dashboardSectionTitle("AULAS"));
-        content.addView(infoCard(
-                "Aulas concluídas",
-                completedLessons + " / " + totalLessons + "\nPercentual: " + lessonPercent + "%"
-        ), matchWrap(0, 16));
-
-        TextView restore = button("RESETAR PROGRESSO", WHITE, TEAL, 56);
-        restore.setBackground(pressable(WHITE, SOFT, 16, TEAL));
-        restore.setOnClickListener(v -> new AlertDialog.Builder(this)
-                .setTitle("Resetar progresso?")
-                .setMessage("Todas as aulas voltarão para não concluídas.")
-                .setNegativeButton("Cancelar", null)
-                .setPositiveButton("Resetar", (dialog, which) -> {
-                    progressStore.restoreInitialState();
-                    syncAllProgress(true);
-                    updateCalculatedLevel();
-                    showProgress();
-                })
-                .show());
-        content.addView(restore, matchWrap(0, 0));
+        content.addView(dashboardSectionTitle("TRIVIAS"));
+        content.addView(text("Acesse suas aulas e acompanhe o progresso em cada Trivia.",
+                15, TEXT, false, Gravity.START, 0, 16));
+        TextView beginner = button("TRIVIA INICIANTE", CYAN, WHITE, 52);
+        beginner.setOnClickListener(v -> openFixedTriviaModule(MODULE_TRIVIA_BEGINNER, "Trivia Iniciante"));
+        content.addView(beginner, matchWrap(0, 12));
+        TextView intermediate = button("TRIVIA INTERMEDIÁRIO", DARK, WHITE, 52);
+        intermediate.setOnClickListener(v -> openFixedTriviaModule(MODULE_TRIVIA_INTERMEDIATE, "Trivia Intermediário"));
+        content.addView(intermediate, matchWrap(0, 0));
 
         scroll.addView(content);
         shell.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -3475,7 +3285,7 @@ public class MainActivity extends AppCompatActivity {
         root.removeAllViews();
 
         LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(pageHeader("Configurações", this::showHome),
+        shell.addView(pageHeader("Configurações", this::showProgress),
                 new LinearLayout.LayoutParams(-1, dp(72)));
 
         ScrollView scroll = new ScrollView(this);
@@ -3530,7 +3340,7 @@ public class MainActivity extends AppCompatActivity {
     private void showUserManagement() {
         stopPractice();
         if (!isConfigurator()) {
-            showCourse(courseLevel);
+            showProgress();
             return;
         }
         screen = Screen.USER_MANAGEMENT;
@@ -3784,7 +3594,7 @@ public class MainActivity extends AppCompatActivity {
         root.removeAllViews();
 
         LinearLayout shell = column(TEAL, Gravity.TOP);
-        shell.addView(pageHeader("Sobre", this::showHome),
+        shell.addView(pageHeader("Sobre", this::showProgress),
                 new LinearLayout.LayoutParams(-1, dp(72)));
 
         ScrollView scroll = new ScrollView(this);
@@ -3869,6 +3679,8 @@ public class MainActivity extends AppCompatActivity {
         TextView progress = drawer.findViewById(R.id.drawerProgress);
         TextView course = drawer.findViewById(R.id.drawerCourse);
         TextView home = drawer.findViewById(R.id.drawerHome);
+        home.setVisibility(View.GONE);
+        course.setVisibility(View.GONE);
         TextView arpeggios = drawer.findViewById(R.id.drawerArpeggios);
         TextView songs = drawer.findViewById(R.id.drawerSongs);
         TextView triviaBeginner = drawer.findViewById(R.id.drawerTriviaBeginner);
@@ -3882,14 +3694,6 @@ public class MainActivity extends AppCompatActivity {
         currentLevel.setText("Nível: " + level);
 
         hideDrawerModules(dynamicScroll, dynamicTopDivider, dynamicBottomDivider, dynamic);
-        home.setOnClickListener(v -> {
-            dialog.dismiss();
-            showHome();
-        });
-        course.setOnClickListener(v -> {
-            dialog.dismiss();
-            showCourse(courseLevel);
-        });
         progress.setOnClickListener(v -> {
             dialog.dismiss();
             showProgress();
@@ -4128,7 +3932,7 @@ public class MainActivity extends AppCompatActivity {
             } else if (screen == Screen.PROGRESS) {
                 showProgress();
             } else {
-                showCourse(courseLevel);
+                showProgress();
             }
         });
         cancel.setOnClickListener(v -> dialog.dismiss());
@@ -4832,37 +4636,43 @@ public class MainActivity extends AppCompatActivity {
                 finish();
                 break;
             case LEVEL:
-                showHome();
-                break;
             case COURSE:
-                showLevelChoice();
-                break;
             case MODULE:
-                showHome();
+                showProgress();
                 break;
             case REGISTER:
                 showWelcome();
                 break;
             case LESSON:
-                showCourse(courseLevel);
+                showProgress();
                 break;
             case PRACTICE:
                 returnFromPractice();
                 break;
             case ARPEGGIOS:
             case SONGS:
-            case PROGRESS:
             case SETTINGS:
             case ABOUT:
-            case ADMIN_PANEL:
             default:
                 if (isConfigurator()) {
                     showConfiguratorDashboard();
                 } else if (isAdmin()) {
                     showAdminDashboard();
                 } else {
-                    showHome();
+                    showProgress();
                 }
+                break;
+            case PROGRESS:
+                if (isConfigurator()) {
+                    showConfiguratorDashboard();
+                } else if (isAdmin()) {
+                    showAdminDashboard();
+                } else {
+                    finish();
+                }
+                break;
+            case ADMIN_PANEL:
+                finish();
                 break;
             case ADMIN_SONGS:
             case ADMIN_ARPEGGIOS:
