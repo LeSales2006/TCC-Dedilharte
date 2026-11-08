@@ -43,6 +43,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.example.dedilharte.auth.SessionManager;
 import com.example.dedilharte.audio.GuitarSoundPlayer;
 import com.example.dedilharte.data.ActivityStore;
+import com.example.dedilharte.data.DashboardMetrics;
+import com.example.dedilharte.data.DashboardRepository;
 import com.example.dedilharte.data.ArpeggioRepository;
 import com.example.dedilharte.data.LessonRepository;
 import com.example.dedilharte.data.ProgressStore;
@@ -71,6 +73,7 @@ import com.example.dedilharte.network.model.UserListResponse;
 import com.example.dedilharte.network.model.UserResponse;
 import com.example.dedilharte.sync.DedilharteSyncManager;
 import com.example.dedilharte.view.GuitarPracticeView;
+import com.example.dedilharte.view.ProgressDashboardView;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -217,6 +220,8 @@ public class MainActivity extends AppCompatActivity {
     private ProgressStore progressStore;
     private ActivityStore activityStore;
     private SongProgressStore songProgressStore;
+    private DashboardRepository dashboardRepository;
+    private long songProgressRevision;
     private ThemeStore themeStore;
     private DedilharteSyncManager syncManager;
     private SongRepository songRepository;
@@ -278,6 +283,7 @@ public class MainActivity extends AppCompatActivity {
         progressStore = new ProgressStore(this, currentUserId);
         activityStore = new ActivityStore(this, currentUserId);
         songProgressStore = new SongProgressStore(this, currentUserId);
+        dashboardRepository = new DashboardRepository(this);
         syncManager = new DedilharteSyncManager();
         songRepository = new SongRepository(this);
         arpeggioRepository = new ArpeggioRepository(this);
@@ -456,29 +462,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateCalculatedLevel() {
-        float beginnerTriviaRatio = 0f;
-        float intermediateTriviaRatio = 0f;
-        int weightedLearned = weightedLearnedSongs();
-        int weightedTotal = weightedTotalSongs();
-        float activityRatio = activityStore == null
-                ? 0f
-                : StudentMetrics.activityRatio(weeklyGoal, activityStore.weeklyAccessesLastFourWeeks());
-        float score = StudentMetrics.levelScore(
-                beginnerTriviaRatio,
-                intermediateTriviaRatio,
-                weightedLearned,
-                weightedTotal,
-                activityRatio
-        );
-        String calculated = StudentMetrics.calculatedLevel(score, beginnerTriviaRatio).startsWith("Intermedi")
-                ? LessonRepository.INTERMEDIATE
-                : LessonRepository.BEGINNER;
+        if (dashboardRepository == null) return;
+        DashboardMetrics metrics = dashboardRepository.cached();
+        if (metrics == null || !metrics.complete()) return;
+        String calculated = metrics.level();
         if (!calculated.equals(level)) {
             level = calculated;
             saveActiveProfile();
         }
     }
-
     private int weightedLearnedSongs() {
         int total = 0;
         if (songProgressStore == null || songRepository == null) {
@@ -517,7 +509,14 @@ public class MainActivity extends AppCompatActivity {
         syncActiveUser();
         syncManager.fetchRemoteUser(currentUserId, this::applyRemoteUserIfNewer);
         syncAllProgress(includeAllProgress);
-        syncManager.fetchSongProgress(this::applyRemoteSongProgress);
+        final String progressOwner = currentUserId;
+        final String progressToken = sessionManager.getToken();
+        final long progressRevision = songProgressRevision;
+        syncManager.fetchSongProgress(items -> {
+            if (isCurrentProgressSession(progressOwner, progressToken) && progressRevision == songProgressRevision) {
+                applyRemoteSongProgress(items);
+            }
+        });
         syncManager.fetchRemoteProgress(currentUserId, progressStore, () -> {
             if (screen == Screen.PROGRESS) {
                 showProgress();
@@ -592,7 +591,9 @@ public class MainActivity extends AppCompatActivity {
         }
         activityStore.recordToday();
         if (syncManager != null) {
-            syncManager.recordActivity();
+            syncManager.recordActivity(() -> {
+                if (!isDestroyed() && screen == Screen.PROGRESS) showProgress();
+            });
         }
     }
 
@@ -630,6 +631,8 @@ public class MainActivity extends AppCompatActivity {
         if (songProgressStore != null) {
             songProgressStore.setUserId(currentUserId);
         }
+        if (dashboardRepository != null) dashboardRepository.cancel();
+        dashboardRepository = new DashboardRepository(this);
         synchronizeCurrentUser(false);
         if (isConfigurator()) {
             showConfiguratorDashboard();
@@ -2973,73 +2976,34 @@ public class MainActivity extends AppCompatActivity {
         showProgressDashboard();
     }
     private void showProgressDashboard() {
-        LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(mainHeader(),
-                new LinearLayout.LayoutParams(-1, dp(72)));
-
-        ScrollView scroll = new ScrollView(this);
-        LinearLayout content = column(WHITE, Gravity.TOP);
-        content.setPadding(dp(24), dp(24), dp(24), dp(32));
-        content.addView(text("Seu progresso", 29, DARK, true, Gravity.START, 0, 16));
-
-        LinearLayout profileCard = column(SOFT, Gravity.CENTER_HORIZONTAL);
-        profileCard.setPadding(dp(16), dp(16), dp(16), dp(16));
-        profileCard.setBackground(roundRect(SOFT, 16));
-        ImageView avatar = new ImageView(this);
-        avatar.setLayoutParams(new LinearLayout.LayoutParams(dp(92), dp(92)));
-        avatar.setBackgroundResource(R.drawable.bg_profile_photo);
-        avatar.setPadding(dp(6), dp(6), dp(6), dp(6));
-        avatar.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        bindProfilePhoto(avatar);
-        profileCard.addView(avatar);
-        profileCard.addView(text(userName, 20, DARK, true, Gravity.CENTER, 12, 6));
         updateCalculatedLevel();
-        profileCard.addView(text("Nível atual: " + level.toUpperCase(Locale.ROOT), 15, TEAL, true, Gravity.CENTER, 0, 0));
-        content.addView(profileCard, matchWrap(0, 16));
-
-        int accessDaysThisWeek = activityStore == null ? 0 : activityStore.accessDaysThisWeek();
-        int accessDaysLastFourWeeks = activityStore == null ? accessDaysThisWeek : activityStore.accessDaysLastFourWeeks();
-        int availableWeeks = activityStore == null ? 1 : activityStore.availableWeeks(activeUserCreatedAt());
-        float average = accessDaysLastFourWeeks / (float) Math.max(1, availableWeeks);
-        StudentMetrics.WeeklyStatus status = StudentMetrics.weeklyStatus(weeklyGoal, accessDaysThisWeek);
-
-        LinearLayout statusCard = column(SOFT, Gravity.TOP);
-        statusCard.setPadding(dp(16), dp(15), dp(16), dp(15));
-        statusCard.setBackground(roundRect(SOFT, 16));
-        statusCard.addView(text("Status semanal", 13, TEAL, true, Gravity.START, 0, 7));
-        statusCard.addView(text(status.label(), 22, DARK, true, Gravity.START, 0, 7));
-        statusCard.addView(text(status.message(), 15, TEXT, false, Gravity.START, 0, 10));
-        statusCard.addView(text("Meta semanal: " + weeklyGoal + (weeklyGoal == 1 ? " dia" : " dias"), 15, DARK, true, Gravity.START, 0, 5));
-        statusCard.addView(text("Acessos esta semana: " + accessDaysThisWeek + " / " + weeklyGoal, 15, DARK, true, Gravity.START, 0, 5));
-        statusCard.addView(text("Média de acessos por semana: " + String.format(Locale.getDefault(), "%.1f", average), 15, DARK, true, Gravity.START, 0, 0));
-        content.addView(statusCard, matchWrap(0, 16));
-
-        List<Song> songs = songRepository.publishedQueued();
-        int learnedSongs = songProgressStore == null ? 0 : songProgressStore.learnedCount(songs);
-        int easySongs = songProgressStore == null ? 0 : songProgressStore.learnedCountByDifficulty(songs, Song.EASY);
-        int mediumSongs = songProgressStore == null ? 0 : songProgressStore.learnedCountByDifficulty(songs, Song.MEDIUM);
-        int hardSongs = songProgressStore == null ? 0 : songProgressStore.learnedCountByDifficulty(songs, Song.HARD);
-        content.addView(dashboardSectionTitle("MÚSICAS"));
-        content.addView(infoCard(
-                "Músicas aprendidas",
-                learnedSongs + "\nFáceis: " + easySongs + "\nMédias: " + mediumSongs + "\nDifíceis: " + hardSongs
-        ), matchWrap(0, 16));
-
-        content.addView(dashboardSectionTitle("TRIVIAS"));
-        content.addView(text("Acesse suas aulas e acompanhe o progresso em cada Trivia.",
-                15, TEXT, false, Gravity.START, 0, 16));
-        TextView beginner = button("TRIVIA INICIANTE", CYAN, WHITE, 52);
-        beginner.setOnClickListener(v -> openFixedTriviaModule(MODULE_TRIVIA_BEGINNER, "Trivia Iniciante"));
-        content.addView(beginner, matchWrap(0, 12));
-        TextView intermediate = button("TRIVIA INTERMEDIÁRIO", DARK, WHITE, 52);
-        intermediate.setOnClickListener(v -> openFixedTriviaModule(MODULE_TRIVIA_INTERMEDIATE, "Trivia Intermediário"));
-        content.addView(intermediate, matchWrap(0, 0));
-
-        scroll.addView(content);
+        LinearLayout shell = column(WHITE, Gravity.TOP);
+        LinearLayout header = mainHeader();
+        shell.addView(header, new LinearLayout.LayoutParams(-1, dp(56)));
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(header, (view, insets) -> {
+            int top = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.statusBars()).top;
+            view.setPadding(dp(10), top, dp(12), 0);
+            view.getLayoutParams().height = dp(56) + top;
+            view.requestLayout();
+            return insets;
+        });
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        ProgressDashboardView dashboard = new ProgressDashboardView(this, userName, level, weeklyGoal,
+                () -> openFixedTriviaModule(MODULE_TRIVIA_BEGINNER, "Trivia Iniciante"),
+                () -> openFixedTriviaModule(MODULE_TRIVIA_INTERMEDIATE, "Trivia Intermediário"),
+                this::showProgress);
+        bindProfilePhoto(dashboard.avatar);
+        scroll.addView(dashboard);
         shell.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         root.addView(shell, matchMatch());
+        header.post(() -> androidx.core.view.ViewCompat.requestApplyInsets(header));
+        dashboardRepository.refresh((data, loading, notice) -> {
+            if (isDestroyed() || shell.getParent() != root) return;
+            dashboard.render(data, loading, notice);
+            if (data != null && !loading && notice.isEmpty()) updateCalculatedLevel();
+        });
     }
-
     private TextView dashboardSectionTitle(String value) {
         return text(value, 14, TEAL, true, Gravity.START, 6, 10);
     }
@@ -3056,7 +3020,8 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(16), dp(24), dp(16), dp(32));
         content.addView(text("Olá, " + firstName() + "!", 18, TEAL, false, Gravity.START, 0, 8));
-        content.addView(text("Trilha " + level, 30, DARK, false, Gravity.START, 0, 10));
+        String moduleLevel = MODULE_TRIVIA_INTERMEDIATE.equals(module.id) ? LessonRepository.INTERMEDIATE : LessonRepository.BEGINNER;
+        content.addView(text("Trilha " + moduleLevel, 30, DARK, false, Gravity.START, 0, 10));
         if (module.description != null && !module.description.trim().isEmpty()) {
             content.addView(text(module.description, 15, TEXT, false, Gravity.START, 0, 18));
         }
@@ -3079,7 +3044,7 @@ public class MainActivity extends AppCompatActivity {
         TextView refresh = button("ATUALIZAR", DARK, WHITE, 48);
         refresh.setOnClickListener(v -> openFixedTriviaModule(module.id, module.name));
         content.addView(refresh, matchWrap(0, 16));
-        content.addView(trackSwitchPanel(level), matchWrap(0, 0));
+        content.addView(trackSwitchPanel(moduleLevel), matchWrap(0, 0));
         scroll.addView(content);
         shell.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         root.addView(shell, matchMatch());
@@ -3160,7 +3125,6 @@ public class MainActivity extends AppCompatActivity {
         currentModuleItem = item;
         currentLesson = null;
         progressStore.rememberLesson(module.id, item.id);
-        level = MODULE_TRIVIA_INTERMEDIATE.equals(module.id) ? LessonRepository.INTERMEDIATE : LessonRepository.BEGINNER;
         root.removeAllViews();
         LinearLayout shell = column(WHITE, Gravity.TOP);
         shell.addView(pageHeader("Conteúdo da aula", () -> openFixedTriviaModule(module.id, module.name)),
@@ -3256,15 +3220,19 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void submitModuleProgress(LearningModuleItemResponse item, Integer selected, TextView button) {
+        final String owner = currentUserId;
+        final String token = sessionManager.getToken();
         button.setEnabled(false);
         DedilharteApiClient.service().upsertModuleProgress(item.id, new ModuleProgressRequest(true, selected))
                 .enqueue(new Callback<Void>() {
                     @Override
                     public void onResponse(Call<Void> call, Response<Void> response) {
-                        if (isDestroyed()) return;
+                        if (!isCurrentProgressSession(owner, token)) return;
                         button.setEnabled(true);
                         if (response.isSuccessful()) {
+                            dashboardRepository.invalidate();
                             button.setText(selected == null ? "AULA CONCLUÍDA ✓" : "RESPOSTA ENVIADA ✓");
+                            if (screen == Screen.PROGRESS) showProgress();
                         } else {
                             Toast.makeText(MainActivity.this, com.example.dedilharte.network.ApiErrors.message(
                                     response, "Não foi possível salvar o progresso."), Toast.LENGTH_LONG).show();
@@ -3272,7 +3240,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                     @Override
                     public void onFailure(Call<Void> call, Throwable t) {
-                        if (isDestroyed()) return;
+                        if (!isCurrentProgressSession(owner, token)) return;
                         button.setEnabled(true);
                         Toast.makeText(MainActivity.this, "Falha de conexão ao salvar o progresso. Tente novamente.", Toast.LENGTH_LONG).show();
                     }
@@ -3679,8 +3647,10 @@ public class MainActivity extends AppCompatActivity {
         TextView progress = drawer.findViewById(R.id.drawerProgress);
         TextView course = drawer.findViewById(R.id.drawerCourse);
         TextView home = drawer.findViewById(R.id.drawerHome);
-        home.setVisibility(View.GONE);
+
+        home.setVisibility(View.VISIBLE);
         course.setVisibility(View.GONE);
+
         TextView arpeggios = drawer.findViewById(R.id.drawerArpeggios);
         TextView songs = drawer.findViewById(R.id.drawerSongs);
         TextView triviaBeginner = drawer.findViewById(R.id.drawerTriviaBeginner);
@@ -3693,11 +3663,17 @@ public class MainActivity extends AppCompatActivity {
         name.setText(userName);
         currentLevel.setText("Nível: " + level);
 
+
         hideDrawerModules(dynamicScroll, dynamicTopDivider, dynamicBottomDivider, dynamic);
         progress.setOnClickListener(v -> {
             dialog.dismiss();
             showProgress();
         });
+        home.setOnClickListener(v -> {
+            dialog.dismiss();
+            showHome();
+        });
+
         arpeggios.setOnClickListener(v -> {
             dialog.dismiss();
             showArpeggios();
@@ -3770,8 +3746,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void openFixedTriviaModule(String moduleId, String moduleTitle) {
-        level = MODULE_TRIVIA_INTERMEDIATE.equals(moduleId) ? LessonRepository.INTERMEDIATE : LessonRepository.BEGINNER;
-        saveActiveProfile();
         stopPractice();
         screen = Screen.MODULE;
         currentLesson = null;
@@ -4025,18 +3999,43 @@ public class MainActivity extends AppCompatActivity {
         );
         view.setOnClickListener(v -> {
             boolean newValue = songProgressStore == null || !songProgressStore.isLearned(song.getId());
-            if (songProgressStore != null) {
-                songProgressStore.setLearned(song.getId(), newValue);
-            }
-            if (syncManager != null) {
-                syncManager.syncSongProgress(song.getId(), newValue);
-            }
-            updateCalculatedLevel();
-            view.setText(newValue ? "MÚSICA APRENDIDA ✓" : "APRENDI ESTA MÚSICA");
-            view.setTextColor(newValue ? DARK : WHITE);
-            view.setBackground(pressable(newValue ? PALE : CYAN, DARK, 16, newValue ? DARK : WHITE));
+            final String owner = currentUserId;
+            final String token = sessionManager.getToken();
+            view.setEnabled(false);
+            DedilharteApiClient.service().upsertSongProgress(
+                    new com.example.dedilharte.network.model.SongProgressRequest(song.getId(), newValue))
+                    .enqueue(new Callback<SongProgressResponse>() {
+                        @Override public void onResponse(Call<SongProgressResponse> call, Response<SongProgressResponse> response) {
+                            if (!isCurrentProgressSession(owner, token)) return;
+                            view.setEnabled(true);
+                            SongProgressResponse saved = response.body();
+                            if (!response.isSuccessful() || saved == null || !owner.equals(saved.user_id)
+                                    || !song.getId().equals(saved.song_id)) {
+                                showError(); return;
+                            }
+                            songProgressRevision++;
+                            songProgressStore.setLearned(song.getId(), saved.learned);
+                            dashboardRepository.invalidate();
+                            view.setText(saved.learned ? "MÚSICA APRENDIDA ✓" : "APRENDI ESTA MÚSICA");
+                            view.setTextColor(saved.learned ? DARK : WHITE);
+                            view.setBackground(pressable(saved.learned ? PALE : CYAN, DARK, 16, saved.learned ? DARK : WHITE));
+                            if (screen == Screen.PROGRESS) showProgress();
+                        }
+                        @Override public void onFailure(Call<SongProgressResponse> call, Throwable error) {
+                            if (!isCurrentProgressSession(owner, token)) return;
+                            view.setEnabled(true); showError();
+                        }
+                        private void showError() {
+                            Toast.makeText(MainActivity.this, "Não foi possível salvar. Verifique a conexão e tente novamente.", Toast.LENGTH_LONG).show();
+                        }
+                    });
         });
         return view;
+    }
+
+    private boolean isCurrentProgressSession(String owner, String token) {
+        return !isDestroyed() && owner.equals(currentUserId) && owner.equals(sessionManager.getUserId())
+                && token.equals(sessionManager.getToken());
     }
 
     private View infoCard(String heading, String body) {
@@ -4627,7 +4626,7 @@ public class MainActivity extends AppCompatActivity {
     private void handleBackNavigation() {
         switch (screen) {
             case HOME:
-                finish();
+                showProgress();
                 break;
             case MODULE_PREVIEW:
                 openFixedTriviaModule(currentModule.id, currentModule.name);
@@ -4708,6 +4707,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        if (dashboardRepository != null) dashboardRepository.cancel();
         stopPractice();
         super.onDestroy();
     }

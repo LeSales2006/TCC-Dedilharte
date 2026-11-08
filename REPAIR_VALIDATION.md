@@ -201,6 +201,125 @@ Alterações anteriores de telas, áudio e outros recursos foram preservadas.
 - APK final: `app/build/outputs/apk/debug/app-debug.apk`, com application ID
   original `com.example.dedilharte`.
 
+## Seu progresso — 08/11/2026
+
+- Tela redesenhada em `view/ProgressDashboardView.java`: perfil horizontal,
+  cartões arredondados, ícones, cores existentes e barras animadas em 600 ms.
+  Mostra meta semanal, as duas Trivias e músicas aprendidas por dificuldade.
+- `data/DashboardMetrics.java` calcula percentuais sobre conteúdo publicado,
+  desconsidera duplicatas e progresso órfão e reutiliza a regra de nível existente
+  com os resultados reais das Trivias, músicas e atividade. Abrir uma Trivia
+  não altera mais o nível calculado do perfil.
+- `data/DashboardRepository.java` reutiliza os cinco endpoints de módulos,
+  progresso de módulos, músicas, progresso de músicas e resumo de atividade.
+  Salva somente respostas completas, em cache separado por usuário; cancela
+  consultas antigas e rejeita respostas de outra sessão. Offline mostra o
+  último resultado válido com data; sem dados mostra indisponibilidade, nunca
+  percentuais inventados. Respostas 401/403 bloqueiam a exibição do cache.
+- `MainActivity.java` atualiza a tela no retorno e após gravações confirmadas.
+  Músicas só aparecem como aprendidas após confirmação da API; falhas permitem
+  tentar novamente. Respostas atrasadas não sobrescrevem gravações recentes
+  nem o progresso de outra conta. Aluno, administrador, menu e atalhos das
+  Trivias mantêm seus destinos; não há fallback para aulas locais.
+- `ActivitySummaryResponse.java`, `ModuleProgressListResponse.java` e
+  `DedilharteSyncManager.java` receberam os campos e callbacks necessários.
+  As alterações preexistentes em `drawer_profile.xml` foram preservadas.
+- `backend/src/controllers/activityController.js` corrige o identificador SQL
+  reservado usado na consulta e acrescenta o histórico semanal ao endpoint
+  autenticado existente, sempre filtrado pelo usuário da sessão. Reutiliza
+  `learning_module_progress`, `user_song_progress` e `user_activity` pelos
+  endpoints existentes. Não foram criados endpoints, dependências ou migrations.
+- Testes adicionados: `DashboardMetricsTest.java`,
+  `DashboardInstrumentedTest.java` e cenários em
+  `backend/test/postgres.integration.test.js`. Ajustados os testes existentes
+  `MainActivityEncodingInstrumentedTest.java` e
+  `TriviaNavigationInstrumentedTest.java` para a nova consulta do dashboard.
+- Os testes PostgreSQL usam um cluster local temporário e schemas isolados;
+  os testes Android usam API simulada e o pacote separado
+  `com.example.dedilharte.navigationtest` no emulador. Nenhum dado existente
+  do Aiven, do aplicativo original ou do celular conectado foi alterado.
+- Validação: **32 testes unitários Android**, **25 testes instrumentados** e
+  **36 testes do backend aprovados**, sem falhas ou testes ignorados. Cobrem
+  percentuais, conteúdo vazio, erros, offline, 403, troca de usuário, respostas
+  atrasadas, conclusão de aula, gravação de música, recriação, persistência no
+  PostgreSQL e navegação. A inspeção visual também identificou e corrigiu o
+  espaçamento do cabeçalho sob a barra de status.
+- Após o ajuste visual, os **7 testes do dashboard passaram novamente**.
+  Build final com JDK 21: `assembleDebug`, `assembleDebugAndroidTest`,
+  `testDebugUnitTest` e `lintDebug` aprovados; lint com **0 erros e 166 avisos**.
+  `git diff --check` aprovado. APK: `app/build/outputs/apk/debug/app-debug.apk`,
+  com o ID original `com.example.dedilharte`. Pacotes temporários removidos do
+  emulador e cluster PostgreSQL de teste encerrado ao final.
+- Evidências: `build/dashboard-backend-tests.log`,
+  `build/dashboard-instrumentation-final.log`,
+  `build/dashboard-insets-instrumentation.log`,
+  `build/dashboard-final-gradle.log` e `build/dashboard-preview.png`.
+  A imagem contém exclusivamente os dados simulados do teste.
+- Pendência de implantação: publicar a alteração do backend e validar a tela
+  com a API implantada. O APK continua usando a URL já configurada. Não houve
+  acesso autenticado à produção, commit ou push nesta etapa.
+
+## Recuperação dos dados de Seu progresso — 08/11/2026
+
+- Diagnóstico confirmado no Android: o repositório exigia sucesso nas cinco
+  consultas para exibir qualquer indicador. Uma resposta HTTP/JSON inválida
+  descartava as respostas válidas dos outros endpoints. Além disso,
+  `invalidate()` apagava o último snapshot após uma gravação, deixando a tela
+  vazia quando a consulta seguinte falhava. O nível era exibido como traço
+  quando não havia snapshot, apesar de existir um valor local.
+- Evidência do ambiente implantado: logs existentes do emulador mostram HTTP
+  **500 em `/api/module-progress` e `/api/songs/progress`**, enquanto
+  `/api/modules` e `/api/songs` retornam 200. Evidência filtrada, sem tokens ou
+  corpos de resposta: `build/dashboard-production-http-evidence.log`.
+  Esses registros são anteriores à correção e não identificam o erro SQL
+  interno do Render/Aiven; não se pode afirmar que uma tabela/coluna específica
+  está ausente sem o log do servidor ou consulta autorizada ao esquema.
+- `DashboardRepository.java` agora atualiza e persiste os grupos Trivias,
+  músicas e atividade independentemente. Mantém o último valor confirmado
+  quando um grupo falha, inclusive após `invalidate()`, e permite recuperar
+  cada grupo na próxima tentativa. Isolamento por usuário/sessão e bloqueio
+  do cache em 401/403 continuam ativos.
+- `DashboardMetrics.java` distingue grupos confirmados de grupos ainda não
+  sincronizados, preservando compatibilidade com snapshots completos antigos.
+  `ProgressDashboardView.java` mostra zeros iniciais acompanhados de indicação
+  de sincronização pendente; respostas vazias válidas mostram 0% e 0 concluídas.
+  `MainActivity.java` fornece nível/meta locais e só persiste um novo nível
+  calculado quando os três grupos têm dados confirmados.
+- Diagnóstico temporário em builds depuráveis, tag `DashboardRepository`:
+  registra caminho da consulta, status HTTP, classe da falha de transporte e
+  motivo de validação JSON. Não registra JWT, identificadores de usuário,
+  cabeçalhos ou corpo das respostas. As mensagens da tela identificam o grupo
+  afetado; carregamento termina mesmo quando uma consulta falha.
+- Endpoints existentes preservados: GET `/api/activity/summary`, `/api/modules`,
+  `/api/module-progress`, `/api/songs` e `/api/songs/progress`. Não há endpoint
+  agregado. Rotas conferidas no Retrofit e em `routes/users.js`, montado sob
+  `/api` e protegido por `authenticateToken`; JSON usa `items` nas listas,
+  `item_id`/`user_id` no progresso, e campos camelCase no resumo de atividade.
+- Testes: `DashboardInstrumentedTest.java` acrescenta falha HTTP 500 em cada
+  endpoint, recuperação, atualização parcial sem apagar outro grupo, cache
+  após invalidação e zeros/nível local no primeiro acesso offline. A suíte
+  Android passou **28 testes instrumentados** e **32 testes unitários**.
+  `backend/test/postgres.integration.test.js` agora também exercita as cinco
+  rotas HTTP reais com JWT, verifica 401 sem token, 200 autenticado e os campos
+  JSON usando PostgreSQL local isolado. **36 testes backend aprovados**, sem
+  falhas ou testes ignorados.
+- Na versão final, os **10 testes do dashboard passaram novamente**.
+  `assembleDebug`, `assembleDebugAndroidTest`, `testDebugUnitTest` e `lintDebug`
+  aprovados; lint com **0 erros e 166 avisos**. APK final em
+  `app/build/outputs/apk/debug/app-debug.apk`, ID `com.example.dedilharte`.
+  Testes no pacote temporário separado, removido ao final; cluster local
+  encerrado. O aplicativo instalado do usuário não foi substituído.
+- Evidências: `build/dashboard-recovery-instrumentation.log`,
+  `build/dashboard-recovery-final-instrumentation.log`,
+  `build/dashboard-recovery-backend.log` e
+  `build/dashboard-recovery-final-gradle.log`.
+- Pendência: obter o erro interno do Render para corrigir os HTTP 500 do
+  ambiente implantado e publicar as correções necessárias. A consulta semanal
+  corrigida na etapa anterior também depende de publicação. Os testes locais
+  não demonstram que o servidor implantado já está corrigido. Solicitada a
+  mensagem de erro do Render, sem segredos; nenhum acesso a credenciais ou
+  dados de produção, implantação, commit ou push foi realizado nesta etapa.
+
 ## Pendências atualizadas — 07/11/2026
 
 - Conferir os seis exercícios reais e o esquema implantado. Continua sem `DATABASE_URL` configurada. O bloqueio anterior da revisão automática ao uso do JWT salvo foi respeitado: foi solicitada autorização específica para consultas de leitura, ainda sem resposta nesta continuação. Nenhum token do usuário foi acessado e as consultas autenticadas não foram executadas.

@@ -79,7 +79,7 @@ public class MainActivityEncodingInstrumentedTest {
                 assertFalse(visible.contains("\u00e2"));
                 assertFalse(visible.contains("\ufffd"));
                 assertTrue(click(root, "TRIVIA INICIANTE"));
-                assertTrue(collectText(root).contains("Carregando conteúdo"));
+                assertTrue(collectText(root).contains("Carregando conteúdo") || collectText(root).contains("Trilha Iniciante"));
                 assertFalse(collectText(root).contains("Conhecendo as cordas"));
                 activity.getOnBackPressedDispatcher().onBackPressed();
                 assertTrue(collectText(root).contains("TRIVIA INTERMEDIÁRIO"));

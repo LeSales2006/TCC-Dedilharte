@@ -66,7 +66,19 @@ public final class DedilharteSyncManager {
     }
 
     public void recordActivity() {
-        api.recordActivity().enqueue(new LoggingCallback<>("recordActivity"));
+        recordActivity(null);
+    }
+
+    public void recordActivity(Runnable onSaved) {
+        api.recordActivity().enqueue(new Callback<Void>() {
+            @Override public void onResponse(Call<Void> call, Response<Void> response) {
+                if (response.isSuccessful() && onSaved != null) mainHandler.post(onSaved);
+                else if (!response.isSuccessful()) logHttp("recordActivity", response.code());
+            }
+            @Override public void onFailure(Call<Void> call, Throwable error) {
+                Log.e(TAG, "recordActivity falhou: " + error.getMessage());
+            }
+        });
     }
 
     public void fetchRemoteUser(String userId, UserSyncCallback callback) {

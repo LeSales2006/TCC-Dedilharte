@@ -46,7 +46,8 @@
         android:id="@+id/drawerDynamicTopDivider"
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="#D2FFFFFF" />
+        android:background="#D2FFFFFF"
+        android:visibility="gone"/>
 
     <ScrollView
         android:id="@+id/drawerDynamicScroll"
@@ -66,12 +67,19 @@
         android:id="@+id/drawerDynamicBottomDivider"
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="#D2FFFFFF" />
+        android:background="#D2FFFFFF"
+        android:visibility="gone"/>
 
     <TextView
         android:id="@+id/drawerHome"
         style="@style/DrawerMenuItem"
         android:text="Início" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#D2FFFFFF"
+        android:visibility="visible" />
 
     <TextView
         android:id="@+id/drawerCourse"

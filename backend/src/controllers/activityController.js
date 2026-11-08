@@ -34,36 +34,24 @@ async function recordAccess(req, res, next) {
 async function getSummary(req, res, next) {
   try {
     const result = await pool.query(
-      `WITH current_user AS (
-           SELECT weekly_goal, created_at::date AS created_date
-           FROM users
-           WHERE id = $1
-       ),
-       current_week AS (
-           SELECT COUNT(DISTINCT access_date)::int AS days
-           FROM user_activity
-           WHERE user_id = $1
-             AND access_date >= date_trunc('week', CURRENT_DATE)::date
-             AND access_date < (date_trunc('week', CURRENT_DATE)::date + INTERVAL '7 days')
-       ),
-       recent AS (
-           SELECT COUNT(DISTINCT access_date)::int AS days
-           FROM user_activity
-           WHERE user_id = $1
-             AND access_date >= (date_trunc('week', CURRENT_DATE)::date - INTERVAL '21 days')
-             AND access_date < (date_trunc('week', CURRENT_DATE)::date + INTERVAL '7 days')
+      `WITH account AS (
+           SELECT weekly_goal, created_at::date AS created_date FROM users WHERE id = $1
+       ), weeks AS (
+           SELECT date_trunc('week', CURRENT_DATE)::date - i * 7 AS start_date
+           FROM generate_series(3, 0, -1) AS i
+       ), totals AS (
+           SELECT w.start_date, COUNT(a.access_date)::int AS days
+           FROM weeks w LEFT JOIN user_activity a
+             ON a.user_id = $1 AND a.access_date >= w.start_date
+             AND a.access_date < w.start_date + 7 AND a.access_date <= CURRENT_DATE
+           GROUP BY w.start_date
        )
-       SELECT
-           COALESCE((SELECT weekly_goal FROM current_user), 3)::int AS weekly_goal,
-           COALESCE((SELECT days FROM current_week), 0)::int AS access_days_this_week,
-           COALESCE((SELECT days FROM recent), 0)::int AS access_days_last_four_weeks,
-           GREATEST(
-               1,
-               LEAST(
-                   4,
-                   FLOOR((CURRENT_DATE - COALESCE((SELECT created_date FROM current_user), CURRENT_DATE)) / 7)::int + 1
-               )
-           ) AS available_weeks`,
+       SELECT COALESCE((SELECT weekly_goal FROM account), 3)::int AS weekly_goal,
+           COALESCE((SELECT days FROM totals WHERE start_date = date_trunc('week', CURRENT_DATE)::date), 0) AS access_days_this_week,
+           (SELECT SUM(days)::int FROM totals) AS access_days_last_four_weeks,
+           (SELECT ARRAY_AGG(days ORDER BY start_date) FROM totals) AS weekly_accesses,
+           GREATEST(1, LEAST(4, (CURRENT_DATE - date_trunc('week',
+               COALESCE((SELECT created_date FROM account), CURRENT_DATE))::date) / 7 + 1)) AS available_weeks`,
       [req.user.id]
     );
 
@@ -79,6 +67,7 @@ async function getSummary(req, res, next) {
       accessDaysLastFourWeeks,
       availableWeeks,
       averageAccessesPerWeek: accessDaysLastFourWeeks / availableWeeks,
+      weeklyAccesses: (row.weekly_accesses || []).slice(-availableWeeks).map(toNumber),
     });
   } catch (error) {
     return next(error);

@@ -41,24 +41,24 @@ public class TriviaNavigationInstrumentedTest extends MainActivityEncodingInstru
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
             scenario.onActivity(activity -> {
                 assertProgress(activity);
-                assertEquals(0, moduleRequests);
+                assertEquals(1, moduleRequests); // Dashboard reads the same catalog.
                 tap(activity, "TRIVIA INICIANTE");
-                assertEquals(1, moduleRequests);
+                assertEquals(2, moduleRequests);
                 assertTrue(text(root(activity)).contains("Exercício remoto iniciante"));
                 assertTrue(text(root(activity)).contains("1 de 1 aulas concluídas"));
                 tap(activity, "INTERMEDIÁRIO");
-                assertEquals(2, moduleRequests);
+                assertEquals(3, moduleRequests);
                 assertTrue(text(root(activity)).contains("Exercício remoto intermediário"));
                 assertFalse(text(root(activity)).contains("Exercício remoto iniciante"));
                 tap(activity, "Abrir aula: Exercício remoto intermediário");
                 assertTrue(text(root(activity)).contains("Conteúdo da aula"));
                 activity.getOnBackPressedDispatcher().onBackPressed();
-                assertEquals(3, moduleRequests);
+                assertEquals(4, moduleRequests);
                 assertTrue(text(root(activity)).contains("Exercício remoto intermediário"));
                 activity.getOnBackPressedDispatcher().onBackPressed();
                 assertProgress(activity);
                 tap(activity, "TRIVIA INTERMEDIÁRIO");
-                assertEquals(4, moduleRequests);
+                assertEquals(6, moduleRequests); // Returning to the dashboard refreshes its counts.
                 assertTrue(text(root(activity)).contains("Exercício remoto intermediário"));
                 assertNoLocalLessons(activity);
             });
@@ -74,14 +74,14 @@ public class TriviaNavigationInstrumentedTest extends MainActivityEncodingInstru
                 assertTrue(text(root(activity)).contains("Verifique sua conexão"));
                 assertNoLocalLessons(activity);
                 tap(activity, "TENTAR NOVAMENTE");
-                assertEquals(2, moduleRequests);
+                assertEquals(3, moduleRequests);
                 offline = false;
                 modules.items = Collections.emptyList();
                 tap(activity, "TENTAR NOVAMENTE");
                 assertTrue(text(root(activity)).contains("Nenhum conteúdo cadastrado"));
                 assertNoLocalLessons(activity);
                 invoke(activity, "showCourse", "Intermediário");
-                assertEquals(4, moduleRequests);
+                assertEquals(5, moduleRequests);
                 assertTrue(text(root(activity)).contains("Trivia Intermediário"));
                 assertTrue(text(root(activity)).contains("Nenhum conteúdo cadastrado"));
                 invoke(activity, "showLevelChoice");
@@ -102,7 +102,7 @@ public class TriviaNavigationInstrumentedTest extends MainActivityEncodingInstru
         installApi();
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
             scenario.onActivity(activity -> tap(activity, "Abrir menu"));
-            onView(withId(R.id.drawerHome)).inRoot(isDialog()).check(matches(withEffectiveVisibility(Visibility.GONE)));
+            onView(withId(R.id.drawerHome)).inRoot(isDialog()).check(matches(withEffectiveVisibility(Visibility.VISIBLE)));
             onView(withId(R.id.drawerCourse)).inRoot(isDialog()).check(matches(withEffectiveVisibility(Visibility.GONE)));
             onView(withId(R.id.drawerDynamicModules)).inRoot(isDialog()).check(matches(withEffectiveVisibility(Visibility.GONE)));
             onView(withId(R.id.drawerTriviaBeginner)).inRoot(isDialog()).perform(scrollTo(), click());
@@ -113,7 +113,7 @@ public class TriviaNavigationInstrumentedTest extends MainActivityEncodingInstru
             onView(withId(R.id.drawerTriviaIntermediate)).inRoot(isDialog()).perform(scrollTo(), click());
             scenario.onActivity(activity -> {
                 assertTrue(text(root(activity)).contains("Exercício remoto intermediário"));
-                assertEquals(2, moduleRequests);
+                assertEquals(3, moduleRequests);
                 activity.getOnBackPressedDispatcher().onBackPressed();
                 assertProgress(activity);
             });
