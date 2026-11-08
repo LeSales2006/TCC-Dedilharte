@@ -24,12 +24,18 @@ public class ArpeggioRepositoryInstrumentedTest {
     @SuppressWarnings("unchecked")
     public void emptyServerOverridesLegacyCacheAndNeverSeedsDefaults() throws Exception {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        com.example.dedilharte.auth.SessionManager session = new com.example.dedilharte.auth.SessionManager(context);
+        String oldToken = session.getToken(), oldId = session.getUserId(), oldName = session.getName(),
+                oldEmail = session.getEmail(), oldRole = session.getRole();
+        int oldGoal = session.getWeeklyGoal();
+        session.saveSession("arp-token", "arp-cache-test", "Test", "test@example.com", "admin");
         SharedPreferences prefs = context.getSharedPreferences("dedilharte_arpeggios", Context.MODE_PRIVATE);
         String oldCache = prefs.getString("cache", null);
         Field field = DedilharteApiClient.class.getDeclaredField("service");
         field.setAccessible(true);
         Object original = field.get(null);
         ArpeggioListResponse body = new ArpeggioListResponse();
+        body.items = new java.util.ArrayList<>();
         boolean[] failed = {false};
         Object call = Proxy.newProxyInstance(Call.class.getClassLoader(), new Class[]{Call.class}, (proxy, method, args) -> {
             if (method.getName().equals("enqueue")) {
@@ -45,13 +51,18 @@ public class ArpeggioRepositoryInstrumentedTest {
                     new Class[]{DedilharteApiService.class}, (proxy, method, args) -> call));
             ArpeggioRepository repository = new ArpeggioRepository(context);
             repository.fetchPublic((items, success) -> { assertTrue(success); assertTrue(items.isEmpty()); });
-            assertEquals("[]", prefs.getString("cache", ""));
+            assertTrue(prefs.getString("cache", "").contains("old")); // Preserve legacy data without importing it.
             repository.fetchAdmin((items, success) -> { assertTrue(success); assertTrue(items.isEmpty()); });
             ArpeggioResponse item = new ArpeggioResponse();
             item.id = "server";
             item.title = "Server arpeggio";
+            item.active = true;
+            item.notes.add(new com.example.dedilharte.network.model.ArpeggioNote(1, 0));
             body.items.add(item);
             repository.fetchPublic((items, success) -> { assertTrue(success); assertEquals("server", items.get(0).id); });
+            failed[0] = true;
+            new ArpeggioRepository(context).fetchPublic((items, success) -> { assertFalse(success); assertEquals("server", items.get(0).id); });
+            failed[0] = false;
             body.items.clear();
             repository.fetchPublic((items, success) -> { assertTrue(success); assertTrue(items.isEmpty()); });
             failed[0] = true;
@@ -62,6 +73,7 @@ public class ArpeggioRepositoryInstrumentedTest {
         } finally {
             field.set(null, original);
             prefs.edit().putString("cache", oldCache).commit();
+            session.saveSession(oldToken, oldId, oldName, oldEmail, oldRole, oldGoal);
         }
     }
 }

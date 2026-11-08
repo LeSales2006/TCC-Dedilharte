@@ -34,10 +34,13 @@ async function upsertMyProgress(req, res, next) {
     const selectedIndex = req.body.selectedIndex ?? req.body.selected_index;
 
     const itemResult = await pool.query(
-      `SELECT i.id, i.item_type, mc.correct_index
+      `SELECT i.id, i.item_type, mc.correct_index, jsonb_array_length(mc.options) AS option_count
        FROM learning_module_items i
+       JOIN learning_modules m ON m.id = i.module_id AND m.active = TRUE
        LEFT JOIN learning_multiple_choice mc ON mc.item_id = i.id
-       WHERE i.id = $1 AND i.active = TRUE`,
+       LEFT JOIN songs s ON s.id = i.song_id AND s.active = TRUE
+       WHERE i.id = $1 AND i.active = TRUE
+         AND (i.item_type <> 'song' OR s.id IS NOT NULL)`,
       [itemId]
     );
     if (itemResult.rowCount === 0) {
@@ -48,8 +51,8 @@ async function upsertMyProgress(req, res, next) {
     let selected = null;
     let finalCompleted = completed;
     if (item.item_type === 'multiple_choice') {
-      selected = Number(selectedIndex);
-      if (!Number.isInteger(selected) || selected < 0) {
+      selected = selectedIndex;
+      if (!Number.isInteger(selected) || selected < 0 || selected >= item.option_count) {
         return res.status(400).json({ error: 'selected_index invalido.' });
       }
       correct = selected === item.correct_index;

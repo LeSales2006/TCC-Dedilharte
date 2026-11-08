@@ -25,18 +25,21 @@ public final class DedilharteApiClient {
         }
     }
 
-    public static DedilharteApiService service() {
+    public static synchronized DedilharteApiService service() {
         if (service == null) {
             HttpLoggingInterceptor logging = new HttpLoggingInterceptor();
             logging.setLevel(HttpLoggingInterceptor.Level.BASIC);
 
             OkHttpClient client = new OkHttpClient.Builder()
+                    .callTimeout(75, TimeUnit.SECONDS)
                     .connectTimeout(20, TimeUnit.SECONDS)
                     .readTimeout(60, TimeUnit.SECONDS)
                     .writeTimeout(60, TimeUnit.SECONDS)
                     .addInterceptor(chain -> {
                         okhttp3.Request request = chain.request();
-                        if (appContext != null && request.header("Authorization") == null) {
+                        boolean publicAuth = request.url().encodedPath().equals("/api/auth/login")
+                                || request.url().encodedPath().equals("/api/auth/register");
+                        if (!publicAuth && appContext != null && request.header("Authorization") == null) {
                             String token = new SessionManager(appContext).getToken();
                             if (token != null && !token.trim().isEmpty()) {
                                 request = request.newBuilder()

@@ -33,10 +33,7 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Rota nao encontrada.' });
 });
 
-app.use((error, req, res, next) => {
-  console.error(error.message);
-  res.status(500).json({ error: 'Erro interno do servidor.' });
-});
+app.use(require('./middleware/errorHandler'));
 
 app.listen(port, () => {
   console.log(`Dedilharte API ouvindo na porta ${port}`);

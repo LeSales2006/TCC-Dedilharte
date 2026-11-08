@@ -85,6 +85,23 @@ public final class SessionManager {
         return !getToken().trim().isEmpty() && !getUserId().trim().isEmpty();
     }
 
+    // Only a previously authenticated, unexpired session may open cached content.
+    // Server authorization still validates the signature, account and token version.
+    public boolean canUseOfflineSession() {
+        if (!isLoggedIn()) return false;
+        try {
+            String[] parts = getToken().split("\\.");
+            if (parts.length != 3) return false;
+            String payload = new String(android.util.Base64.decode(parts[1], android.util.Base64.URL_SAFE),
+                    java.nio.charset.StandardCharsets.UTF_8);
+            org.json.JSONObject claims = new org.json.JSONObject(payload);
+            return getUserId().equals(claims.optString("sub"))
+                    && claims.optLong("exp", 0) > System.currentTimeMillis() / 1000;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
     public void clearSession() {
         preferences.edit().clear().apply();
     }

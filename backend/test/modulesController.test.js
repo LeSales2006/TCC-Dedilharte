@@ -90,9 +90,9 @@ for (const moduleId of ['module_trivia_beginner', 'module_trivia_intermediate'])
       const result = values => ({ rows: values, rowCount: values.length });
       if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql)) return result([]);
       if (sql.includes('INSERT INTO songs')) {
-        const [id, title, artist, difficulty, recommended_bpm, tab, queue_order, in_queue, status] = params;
-        const song = { id, title, artist, difficulty, recommended_bpm, tablature: tab, queue_order, in_queue, status };
-        songs.set(id, song);
+        const columns = sql.match(/INSERT INTO songs \(([^)]+)\)/)[1].split(', ');
+        const song = Object.fromEntries(columns.map((column, index) => [column, params[index]]));
+        songs.set(song.id, song);
         return result([song]);
       }
       if (sql.includes('SELECT id FROM songs')) {
@@ -136,12 +136,12 @@ for (const moduleId of ['module_trivia_beginner', 'module_trivia_intermediate'])
     };
     pool.query = query;
     pool.connect = async () => ({ query, release() {} });
-    const createdSong = await run(songsController.createAdmin, { body: {
-      title: 'Real server ID in test', artist: 'Artist', tablature, recommendedBpm: 60, status: 'publicada',
+    const createdSong = await run(songsController.createAdmin, { user: { id: 'staff' }, body: {
+      title: 'Real server ID in test', artist: 'Artist', tablature, bpm: 60, active: true,
     } });
     assert.equal(createdSong.statusCode, 201);
     const songId = createdSong.body.id;
-    assert.match(songId, /^song_/);
+    assert.match(songId, /^[0-9a-f-]{36}$/);
     assert.equal(songs.get(songId).tablature, tablature);
     const read = handler => run(handler, {});
     for (const handler of [modulesController.listPublic, modulesController.listStaff]) {
@@ -181,3 +181,35 @@ for (const moduleId of ['module_trivia_beginner', 'module_trivia_intermediate'])
     assert.deepEqual((await read(modulesController.listPublic)).body.items, []);
   });
 }
+
+test('public lesson includes active song; independent questions survive missing or archived songs', async () => {
+  const song = { id: 'song-db', title: 'Database song', artist: 'Author', bpm: 90,
+    tablature: 'E|--0--|', active: true, sortOrder: 1 };
+  pool.query = async (sql) => {
+    if (sql.includes('FROM learning_modules')) {
+      return { rowCount: 1, rows: [{ id: 'module_trivia_beginner', active: true }] };
+    }
+    assert.match(sql, /LEFT JOIN songs s ON s.id = i.song_id AND s.active = TRUE/);
+    assert.doesNotMatch(sql, /recommended_bpm|queue_order|in_queue|s.status/);
+    assert.match(sql, /LEFT JOIN learning_multiple_choice/);
+    assert.match(sql, /i.item_type <> 'song' OR s.id IS NOT NULL/);
+    return { rowCount: 2, rows: [
+      { id: 'lesson', module_id: 'module_trivia_beginner', item_type: 'song', song_id: song.id, song },
+      { id: 'question', module_id: 'module_trivia_beginner', item_type: 'multiple_choice', song_id: null,
+        question: 'Question without song?', options: ['A', 'B'] },
+    ] };
+  };
+  const res = await run(modulesController.listPublic, {});
+  assert.deepEqual(res.body.items[0].items[0].song, song);
+  assert.equal(res.body.items[0].items.length, 2);
+  assert.equal(res.body.items[0].items[1].songId, null);
+  assert.equal(res.body.items[0].items[1].multipleChoice.question, 'Question without song?');
+});
+
+test('module mutations forward pool connection failures instead of leaving HTTP requests pending', async () => {
+  pool.connect = async () => { throw Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' }); };
+  for (const handler of [modulesController.createItem, modulesController.updateItem]) {
+    await assert.rejects(run(handler, { params: { id: 'module_trivia_beginner' },
+      body: { itemType: 'song', songId: 'test-song' }, user: { id: 'admin' } }), { code: 'ETIMEDOUT' });
+  }
+});

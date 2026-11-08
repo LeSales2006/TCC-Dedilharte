@@ -44,6 +44,7 @@ public final class LoginActivity extends AppCompatActivity {
     private ProgressBar progressBar;
     private TextView createAccount;
     private CheckBox showPassword;
+    private Call<AuthResponse> pendingCall;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -80,22 +81,34 @@ public final class LoginActivity extends AppCompatActivity {
 
     private void validateSavedSession() {
         setLoading(true);
-        api.me().enqueue(new Callback<AuthResponse>() {
+        pendingCall = api.me();
+        pendingCall.enqueue(new Callback<AuthResponse>() {
             @Override
             public void onResponse(Call<AuthResponse> call, Response<AuthResponse> response) {
-                if (response.isSuccessful() && response.body() != null && response.body().user != null) {
+                if (isFinishing() || isDestroyed()) return;
+                if (response.isSuccessful() && response.body() != null && response.body().user != null
+                        && sessionManager.getUserId().equals(response.body().user.id)) {
                     sessionManager.saveSession(sessionManager.getToken(), response.body().user);
                     openMain();
                     return;
                 }
-                sessionManager.clearSession();
+                if (response.code() == 401 || response.code() == 403) {
+                    sessionManager.clearSession();
+                } else if (response.code() >= 500 && openOfflineIfAvailable()) {
+                    return;
+                }
                 setLoading(false);
+                Toast.makeText(LoginActivity.this, com.example.dedilharte.network.ApiErrors.message(response,
+                        "Não foi possível validar sua sessão. Tente novamente."), Toast.LENGTH_LONG).show();
             }
 
             @Override
             public void onFailure(Call<AuthResponse> call, Throwable t) {
+                if (call.isCanceled() || isFinishing() || isDestroyed()) return;
                 Log.e(TAG, "validacao de sessao falhou: " + t.getMessage());
+                if (t instanceof IOException && openOfflineIfAvailable()) return;
                 setLoading(false);
+                showConnectionError(t);
             }
         });
     }
@@ -109,11 +122,15 @@ public final class LoginActivity extends AppCompatActivity {
         }
 
         setLoading(true);
-        api.login(new LoginRequest(email, password)).enqueue(new Callback<AuthResponse>() {
+        pendingCall = api.login(new LoginRequest(email, password));
+        pendingCall.enqueue(new Callback<AuthResponse>() {
             @Override
             public void onResponse(Call<AuthResponse> call, Response<AuthResponse> response) {
+                if (isFinishing() || isDestroyed()) return;
                 setLoading(false);
-                if (response.isSuccessful() && response.body() != null && response.body().user != null) {
+                if (response.isSuccessful() && response.body() != null && response.body().user != null
+                        && response.body().user.id != null && !response.body().user.id.trim().isEmpty()
+                        && response.body().token != null && !response.body().token.trim().isEmpty()) {
                     sessionManager.saveSession(response.body().token, response.body().user);
                     openMain();
                     return;
@@ -123,9 +140,10 @@ public final class LoginActivity extends AppCompatActivity {
 
             @Override
             public void onFailure(Call<AuthResponse> call, Throwable t) {
+                if (call.isCanceled() || isFinishing() || isDestroyed()) return;
                 setLoading(false);
                 Log.e(TAG, "login falhou: " + t.getMessage());
-                Toast.makeText(LoginActivity.this, "Sem conexão com o servidor. Tente novamente.", Toast.LENGTH_LONG).show();
+                showConnectionError(t);
             }
         });
     }
@@ -140,6 +158,26 @@ public final class LoginActivity extends AppCompatActivity {
             return false;
         }
         return true;
+    }
+
+    private boolean openOfflineIfAvailable() {
+        if (!sessionManager.canUseOfflineSession()) return false;
+        Toast.makeText(this, "Servidor indisponível. Usando conteúdo salvo neste aparelho.", Toast.LENGTH_LONG).show();
+        openMain();
+        return true;
+    }
+
+    private void showConnectionError(Throwable error) {
+        String message = error instanceof javax.net.ssl.SSLException
+                ? "Não foi possível validar a conexão segura. Verifique a rede e a data do aparelho."
+                : "Sem conexão com o servidor. Tente novamente.";
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (pendingCall != null) pendingCall.cancel();
+        super.onDestroy();
     }
 
     private void setLoading(boolean loading) {

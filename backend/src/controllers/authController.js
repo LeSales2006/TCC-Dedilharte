@@ -79,6 +79,7 @@ function ensureJwtSecret(res) {
 
 async function register(req, res, next) {
   try {
+    req.body = req.body || {};
     const name = normalizeName(req.body.name);
     const email = normalizeEmail(req.body.email);
     const password = req.body.password;
@@ -116,12 +117,16 @@ async function register(req, res, next) {
       user,
     });
   } catch (error) {
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'Este e-mail já está cadastrado.' });
+    }
     return next(error);
   }
 }
 
 async function login(req, res, next) {
   try {
+    req.body = req.body || {};
     const email = normalizeEmail(req.body.email);
     const password = req.body.password;
 

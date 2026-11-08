@@ -1,245 +1,293 @@
 package com.example.dedilharte.audio;
 
 import android.content.Context;
+import android.content.res.AssetFileDescriptor;
+import android.content.res.AssetManager;
 import android.media.AudioAttributes;
+import android.media.MediaExtractor;
+import android.media.MediaFormat;
+import android.media.MediaPlayer;
+import android.media.PlaybackParams;
 import android.media.SoundPool;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
-
 import com.example.dedilharte.model.TablatureEvent;
-
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
+/** Offline player. Public methods run on the UI thread; metadata is read off-thread. */
 public final class GuitarSoundPlayer {
-
     private static final String TAG = "GuitarSoundPlayer";
+    private static final int CACHE_LIMIT = 24;
+    private static final int LOOK_AHEAD = 3;
+    private static final long SOUND_POOL_LOAD_TIMEOUT_MS = 5000;
+    public enum State { LOADING, READY, ERROR }
+    public interface OnStateChangeListener { void onStateChanged(State state); }
 
-    public enum State {
-        LOADING,
-        READY,
-        ERROR
-    }
-
-    public interface OnStateChangeListener {
-        void onStateChanged(State state);
-    }
-
-    private static final int[] GUITAR_MIDI_RANGE = {
-            40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
-            52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
-            64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75,
-            76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88
-    };
-    private static final float TARGET_SAMPLE_RMS = 0.020f;
-    private static final float GENERAL_GAIN = 1.0f;
-    private static final int MAX_NOTE_STREAM_COPIES = 3;
-
-    private final SoundPool soundPool;
-    private final Map<Integer, Integer> sampleByMidi = new HashMap<>();
-    private final Map<Integer, Integer> midiBySample = new HashMap<>();
-    private final Map<Integer, Float> rmsByMidi = new HashMap<>();
-    private final List<Integer> activeStreams = new ArrayList<>();
-    private int pendingLoads;
+    private final AssetManager assets;
+    private final Handler main = new Handler(Looper.getMainLooper());
+    private final ExecutorService loader = Executors.newSingleThreadExecutor();
+    private final AudioAttributes attributes = new AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build();
+    private final SoundPool soundPool = new SoundPool.Builder().setAudioAttributes(attributes).setMaxStreams(6).build();
+    private final Map<String, Entry> cache = new LinkedHashMap<>(24, .75f, true);
+    private final Set<String> required = new HashSet<>();
+    private final Entry[] voices = new Entry[6];
+    private final int[] streams = new int[6];
+    private GuitarSampleBank bank;
+    private List<TablatureEvent> sequence = new ArrayList<>();
+    private int position;
+    private int velocity = 80;
+    private boolean looping, released;
     private State state = State.LOADING;
-    private OnStateChangeListener stateChangeListener;
+    private OnStateChangeListener listener;
 
     public GuitarSoundPlayer(Context context) {
-        AudioAttributes attributes = new AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_MEDIA)
-                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                .build();
-        soundPool = new SoundPool.Builder()
-                .setAudioAttributes(attributes)
-                .setMaxStreams(16)
-                .build();
-        soundPool.setOnLoadCompleteListener((pool, sampleId, status) -> {
-            Integer midi = midiBySample.get(sampleId);
-            pendingLoads--;
-            if (status != 0) {
-                if (midi != null) {
-                    sampleByMidi.remove(midi);
-                    rmsByMidi.remove(midi);
-                    Log.e(TAG, "Falha ao carregar sample " + resourceNameForMidi(midi) + " para MIDI " + midi + ": status " + status);
-                } else {
-                    Log.e(TAG, "Falha ao carregar sample desconhecido: status " + status);
+        assets = context.getApplicationContext().getAssets();
+        soundPool.setOnLoadCompleteListener((pool, id, status) -> {
+            if (released) return;
+            Entry loaded = null;
+            for (Entry entry : cache.values()) {
+                if (entry.soundId == id) {
+                    loaded = entry;
+                    break;
                 }
             }
-            if (pendingLoads <= 0) {
-                updateState(sampleByMidi.isEmpty() ? State.ERROR : State.READY);
+            if (loaded == null) return; // An evicted/fallback sample may finish late.
+            if (status == 0) {
+                cancelSoundPoolTimeout(loaded);
+                loaded.ready = true;
+            } else {
+                fallbackToMediaPlayer(loaded);
             }
+            refreshState();
         });
-        loadSamples(context);
+        loader.execute(() -> {
+            try (InputStreamReader manifest = new InputStreamReader(assets.open("guitar/manifest.json"), StandardCharsets.UTF_8);
+                 InputStreamReader sfz = new InputStreamReader(assets.open("guitar/meta-steel-guitar.sfz"), StandardCharsets.UTF_8)) {
+                GuitarSampleBank loaded = new GuitarSampleBank(manifest, sfz);
+                main.post(() -> {
+                    if (released) return;
+                    bank = loaded;
+                    prepare(sequence, position, looping);
+                });
+            } catch (Exception error) { main.post(() -> fail(null, error)); }
+        });
     }
 
-    public State getState() {
-        return state;
-    }
-
+    public State getState() { return state; }
+    public boolean isReady() { return !released && state == State.READY; }
     public String statusText() {
-        if (state == State.LOADING) {
-            return "Carregando sons";
-        }
-        if (state == State.READY) {
-            return "Sons prontos";
-        }
-        return "Adicione samples de violao em res/raw para ativar o som";
+        if (state == State.LOADING) return "Carregando sons locais…";
+        if (state == State.READY) return "Sons prontos";
+        return "Não foi possível carregar os sons locais";
     }
-
-    public boolean isReady() {
-        return state == State.READY;
-    }
-
     public void setOnStateChangeListener(OnStateChangeListener listener) {
-        stateChangeListener = listener;
-        if (listener != null) {
-            listener.onStateChanged(state);
+        this.listener = listener;
+        if (!released && listener != null) listener.onStateChanged(state);
+    }
+    public void setVelocity(int velocity) {
+        this.velocity = Math.max(1, Math.min(127, velocity));
+        prepare(sequence, position, looping);
+    }
+
+    /** At most three events plus the six ringing strings stay resident. */
+    public void prepare(List<TablatureEvent> events, int currentPosition, boolean loop) {
+        if (released) return;
+        sequence = events;
+        position = currentPosition;
+        looping = loop;
+        if (bank == null) return;
+        required.clear();
+        Set<String> window = new java.util.LinkedHashSet<>();
+        for (int offset = 0; offset < Math.min(LOOK_AHEAD, events.size()); offset++) {
+            int index = currentPosition + offset;
+            if (index >= events.size() && !loop) break;
+            for (TablatureEvent.Note note : events.get(index % events.size()).getNotes()) {
+                String path = sample(note).path;
+                window.add(path);
+                if (offset == 0) required.add(path);
+            }
         }
+        for (String path : window) {
+            if (cache.get(path) != null) continue;
+            if (cache.size() >= CACHE_LIMIT) {
+                for (Entry entry : new ArrayList<>(cache.values())) {
+                    if (!window.contains(entry.path) && !isActive(entry)) {
+                        cache.remove(entry.path);
+                        dispose(entry);
+                        break;
+                    }
+                }
+            }
+            if (cache.size() >= CACHE_LIMIT) break;
+            Entry entry = new Entry(path);
+            cache.put(path, entry);
+            inspect(entry);
+        }
+        refreshState();
     }
 
     public void play(TablatureEvent event) {
-        if (!isReady() || event == null) {
-            return;
-        }
-        float limiter = event.getNotes().size() > 1
-                ? (float) (1d / Math.sqrt(event.getNotes().size()))
-                : 1f;
+        if (released || bank == null || event == null) return;
+        // Never play only part of a chord, or replay a stale note after a load.
         for (TablatureEvent.Note note : event.getNotes()) {
-            playMidi(note.getMidiNote(), limiter);
+            Entry entry = cache.get(sample(note).path);
+            if (entry == null || !entry.ready) return;
+        }
+        float limiter = 1f / (float) Math.sqrt(Math.max(1, event.getNotes().size()));
+        for (TablatureEvent.Note note : event.getNotes()) {
+            int string = note.getStringIndex();
+            stopString(string);
+            GuitarSampleBank.Sample sample = sample(note);
+            Entry entry = cache.get(sample.path);
+            float gain = sample.gain * limiter;
+            try {
+                if (entry.media != null) {
+                    entry.media.setVolume(gain, gain);
+                    entry.media.seekTo(0);
+                    entry.media.setPlaybackParams(new PlaybackParams().setSpeed(sample.rate).setPitch(sample.rate));
+                    entry.media.start();
+                } else {
+                    streams[string] = soundPool.play(entry.soundId, gain, gain, 1, 0, sample.rate);
+                }
+                voices[string] = entry;
+            } catch (RuntimeException error) { fail(entry, error); }
         }
     }
-
     public void stopAll() {
-        for (Integer streamId : activeStreams) {
-            soundPool.stop(streamId);
-        }
-        activeStreams.clear();
+        if (!released) for (int string = 0; string < 6; string++) stopString(string);
     }
-
     public void release() {
+        if (released) return;
         stopAll();
+        released = true;
+        listener = null;
+        loader.shutdownNow();
+        for (Entry entry : cache.values()) dispose(entry);
+        cache.clear();
         soundPool.release();
     }
-
-    private void playMidi(int midi, float limiter) {
-        Integer exactSample = sampleByMidi.get(midi);
-        if (exactSample == null) {
-            Log.e(TAG, "Sample ausente para MIDI " + midi + " (" + midiToResourceName(midi) + ")");
-            return;
-        }
-        float sampleRms = rmsByMidi.containsKey(midi) ? rmsByMidi.get(midi) : TARGET_SAMPLE_RMS;
-        int copies = streamCopiesFor(sampleRms);
-        float noteGain = Math.min(1f, TARGET_SAMPLE_RMS / Math.max(0.0001f, sampleRms * copies));
-        float outputGain = Math.min(1f, noteGain * GENERAL_GAIN * limiter);
-        for (int i = 0; i < copies; i++) {
-            int streamId = soundPool.play(exactSample, outputGain, outputGain, 1, 0, 1f);
-            if (streamId != 0) {
-                activeStreams.add(streamId);
-            }
-        }
+    private GuitarSampleBank.Sample sample(TablatureEvent.Note note) {
+        return bank.resolve(note.getStringIndex(), note.getFret(), velocity);
     }
-
-    private int streamCopiesFor(float sampleRms) {
-        int copies = Math.round(TARGET_SAMPLE_RMS / Math.max(0.0001f, sampleRms));
-        if (copies < 1) {
-            return 1;
-        }
-        return Math.min(MAX_NOTE_STREAM_COPIES, copies);
+    private void inspect(Entry entry) {
+        loader.execute(() -> {
+            if (entry.disposed) return;
+            MediaExtractor extractor = new MediaExtractor();
+            try (AssetFileDescriptor fd = assets.openFd(entry.path)) {
+                extractor.setDataSource(fd.getFileDescriptor(), fd.getStartOffset(), fd.getLength());
+                MediaFormat format = extractor.getTrackFormat(0);
+                long pcmBytes = format.getLong(MediaFormat.KEY_DURATION) * format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                        / 1_000_000L * format.getInteger(MediaFormat.KEY_CHANNEL_COUNT) * 2L;
+                // SoundPool truncates beyond 1 MiB. Stream long decays locally instead.
+                boolean longSample = pcmBytes > 1_048_576L;
+                main.post(() -> load(entry, longSample));
+            } catch (Exception error) { main.post(() -> fail(entry, error)); }
+            finally { extractor.release(); }
+        });
     }
-
-    private void loadSamples(Context context) {
-        for (int midi : GUITAR_MIDI_RANGE) {
-            String resourceName = "guitar_" + midiToResourceName(midi);
-            int resourceId = context.getResources().getIdentifier(
-                    resourceName,
-                    "raw",
-                    context.getPackageName()
-            );
-            if (resourceId != 0) {
-                int sampleId = soundPool.load(context, resourceId, 1);
-                sampleByMidi.put(midi, sampleId);
-                midiBySample.put(sampleId, midi);
-                rmsByMidi.put(midi, rmsForMidi(midi));
-                pendingLoads++;
+    private void load(Entry entry, boolean longSample) {
+        if (released || cache.get(entry.path) != entry) return;
+        try (AssetFileDescriptor fd = assets.openFd(entry.path)) {
+            if (longSample) {
+                MediaPlayer media = new MediaPlayer();
+                entry.media = media;
+                media.setAudioAttributes(attributes);
+                media.setDataSource(fd.getFileDescriptor(), fd.getStartOffset(), fd.getLength());
+                media.setOnPreparedListener(player -> {
+                    if (released || cache.get(entry.path) != entry) return;
+                    entry.ready = true;
+                    refreshState();
+                });
+                media.setOnErrorListener((player, what, extra) -> {
+                    fail(entry, new IllegalStateException("MediaPlayer " + what + "/" + extra));
+                    return true;
+                });
+                media.prepareAsync();
             } else {
-                Log.w(TAG, "Sample nao encontrado em res/raw: " + resourceName);
+                entry.soundId = soundPool.load(fd, 1);
+                if (entry.soundId == 0) {
+                    fallbackToMediaPlayer(entry);
+                } else {
+                    entry.loadTimeout = () -> fallbackToMediaPlayer(entry);
+                    main.postDelayed(entry.loadTimeout, SOUND_POOL_LOAD_TIMEOUT_MS);
+                }
             }
-        }
-        if (pendingLoads == 0) {
-            updateState(State.ERROR);
+        } catch (Exception error) { fail(entry, error); }
+    }
+    private void stopString(int string) {
+        if (streams[string] != 0) soundPool.stop(streams[string]);
+        streams[string] = 0;
+        Entry entry = voices[string];
+        voices[string] = null;
+        if (entry != null && entry.media != null && entry.ready && !entry.failed) {
+            entry.media.pause();
+            entry.media.seekTo(0);
         }
     }
-
-    private void updateState(State newState) {
-        if (state == newState) {
-            return;
-        }
-        state = newState;
-        if (stateChangeListener != null) {
-            stateChangeListener.onStateChanged(state);
-        }
+    private boolean isActive(Entry entry) {
+        for (Entry voice : voices) if (voice == entry) return true;
+        return false;
     }
-
-    private String resourceNameForMidi(int midi) {
-        return "guitar_" + midiToResourceName(midi);
+    private void dispose(Entry entry) {
+        entry.disposed = true;
+        cancelSoundPoolTimeout(entry);
+        if (entry.media != null) entry.media.release();
+        if (entry.soundId != 0) soundPool.unload(entry.soundId);
     }
-
-    private String midiToResourceName(int midi) {
-        String[] names = {
-                "c", "cs", "d", "ds", "e", "f", "fs", "g", "gs", "a", "as", "b"
-        };
-        int octave = (midi / 12) - 1;
-        return names[midi % 12] + octave;
+    private void fail(Entry entry, Exception error) {
+        if (released || (entry != null && cache.get(entry.path) != entry)) return;
+        if (entry != null) cancelSoundPoolTimeout(entry);
+        Log.e(TAG, "Falha no áudio local" + (entry == null ? "" : ": " + entry.path), error);
+        if (entry == null) updateState(State.ERROR);
+        else { entry.failed = true; entry.ready = false; refreshState(); }
     }
-
-    private float rmsForMidi(int midi) {
-        switch (midi) {
-            case 40: return 0.0137f;
-            case 41: return 0.0073f;
-            case 42: return 0.0186f;
-            case 43: return 0.0222f;
-            case 44: return 0.0155f;
-            case 45: return 0.0104f;
-            case 46: return 0.0129f;
-            case 47: return 0.0114f;
-            case 48: return 0.0311f;
-            case 49: return 0.0191f;
-            case 50: return 0.0126f;
-            case 51: return 0.0198f;
-            case 52: return 0.0265f;
-            case 53: return 0.0233f;
-            case 54: return 0.0184f;
-            case 55: return 0.0290f;
-            case 56: return 0.0151f;
-            case 57: return 0.0198f;
-            case 58: return 0.0157f;
-            case 59: return 0.0216f;
-            case 60: return 0.0283f;
-            case 61: return 0.0161f;
-            case 62: return 0.0125f;
-            case 63: return 0.0198f;
-            case 64: return 0.0172f;
-            case 65: return 0.0135f;
-            case 66: return 0.0108f;
-            case 67: return 0.0163f;
-            case 68: return 0.0205f;
-            case 69: return 0.0136f;
-            case 70: return 0.0171f;
-            case 71: return 0.0193f;
-            case 72: return 0.0212f;
-            case 73: return 0.0127f;
-            case 74: return 0.0154f;
-            case 75: return 0.0155f;
-            case 76: return 0.0159f;
-            case 77: return 0.0134f;
-            case 78: return 0.0148f;
-            case 79: return 0.0148f;
-            case 80: return 0.0263f;
-            case 81: return 0.0157f;
-            case 82: return 0.0138f;
-            case 83: return 0.0163f;
-            default: return TARGET_SAMPLE_RMS;
+    private void cancelSoundPoolTimeout(Entry entry) {
+        if (entry.loadTimeout != null) main.removeCallbacks(entry.loadTimeout);
+        entry.loadTimeout = null;
+    }
+    private void fallbackToMediaPlayer(Entry entry) {
+        if (released || entry.disposed || entry.ready || entry.failed
+                || entry.media != null || cache.get(entry.path) != entry) return;
+        cancelSoundPoolTimeout(entry);
+        Log.w(TAG, "SoundPool não confirmou a amostra; usando MediaPlayer local: " + entry.path);
+        int oldSoundId = entry.soundId;
+        entry.soundId = 0;
+        if (oldSoundId != 0) soundPool.unload(oldSoundId);
+        load(entry, true);
+    }
+    private void refreshState() {
+        if (released) return;
+        State next = State.READY;
+        for (String path : required) {
+            Entry entry = cache.get(path);
+            if (entry != null && entry.failed) { next = State.ERROR; break; }
+            if (entry == null || !entry.ready) next = State.LOADING;
         }
+        updateState(next);
+    }
+    private void updateState(State next) {
+        if (state == next) return;
+        state = next;
+        if (listener != null) listener.onStateChanged(next);
+    }
+    private static final class Entry {
+        final String path;
+        int soundId;
+        MediaPlayer media;
+        Runnable loadTimeout;
+        boolean ready, failed;
+        volatile boolean disposed;
+        Entry(String path) { this.path = path; }
     }
 }

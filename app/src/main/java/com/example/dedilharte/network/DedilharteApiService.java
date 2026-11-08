@@ -118,6 +118,9 @@ public interface DedilharteApiService {
     @GET("api/modules")
     Call<LearningModuleListResponse> getModules();
 
+    @GET("api/module-progress")
+    Call<com.example.dedilharte.network.model.ModuleProgressListResponse> getModuleProgress();
+
     @GET("api/staff/modules")
     Call<LearningModuleListResponse> getStaffModules();
 

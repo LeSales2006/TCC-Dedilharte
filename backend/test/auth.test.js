@@ -158,3 +158,38 @@ test('/auth/me sem token retorna 401', () => {
 
   assert.equal(res.statusCode, 401);
 });
+
+test('database failure with a valid JWT reaches HTTP error handling, not 401', async () => {
+  const outage = Object.assign(new Error('unavailable'), { code: 'ECONNREFUSED' });
+  pool.query = async () => { throw outage; };
+  const token = jwt.sign({ sub: 'user-1' }, process.env.JWT_SECRET);
+  const res = response();
+  let forwarded;
+  await authenticateToken({ headers: { authorization: `Bearer ${token}` } }, res, error => { forwarded = error; });
+  assert.equal(forwarded, outage);
+  assert.equal(res.body, undefined);
+});
+
+test('expired, revoked, blocked and subject-less JWT sessions are rejected', async () => {
+  for (const [claims, row, status] of [
+    [{ sub: 'user-1', exp: 1 }, {}, 401],
+    [{}, {}, 401],
+    [{ sub: 'user-1', tokenVersion: 1 }, { token_version: 2 }, 401],
+    [{ sub: 'user-1' }, { account_status: 'blocked' }, 403],
+  ]) {
+    pool.query = async () => ({ rowCount: 1, rows: [{ id: 'user-1', ...row }] });
+    const token = jwt.sign(claims, process.env.JWT_SECRET);
+    const res = await run(authenticateToken, { headers: { authorization: `Bearer ${token}` } });
+    assert.equal(res.statusCode, status);
+  }
+});
+
+test('missing login body returns 400 and concurrent duplicate registration returns 409', async () => {
+  assert.equal((await run(authController.login, {})).statusCode, 400);
+  pool.query = async sql => {
+    if (sql.startsWith('SELECT')) return { rowCount: 0, rows: [] };
+    throw Object.assign(new Error('duplicate'), { code: '23505' });
+  };
+  const res = await run(authController.register, { body: { name: 'Test', email: 'test@example.com', password: 'Teste123' } });
+  assert.equal(res.statusCode, 409);
+});

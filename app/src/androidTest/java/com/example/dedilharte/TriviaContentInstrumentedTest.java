@@ -50,11 +50,11 @@ public class TriviaContentInstrumentedTest extends MainActivityEncodingInstrumen
                             new Class[]{DedilharteApiService.class}, (proxy, method, args) ->
                                     method.getName().equals("getModules") ? fake : method.invoke(original, args)));
                     try {
-                        Method open = MainActivity.class.getDeclaredMethod("showCourse", String.class);
+                        Method open = MainActivity.class.getDeclaredMethod("openFixedTriviaModule", String.class, String.class);
                         open.setAccessible(true);
                         View root = activity.findViewById(R.id.root);
                         for (LearningModuleResponse module : body.items) {
-                            open.invoke(activity, module == beginner ? "Iniciante" : "Intermediário");
+                            open.invoke(activity, module.id, module.name);
                             assertTrue(text(root).contains("Nenhum item ativo"));
                             assertFalse(text(root).contains("Conhecendo as cordas"));
                             LearningModuleItemResponse item = new LearningModuleItemResponse();

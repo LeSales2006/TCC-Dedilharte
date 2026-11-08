@@ -30,6 +30,9 @@ function toPublicItem(row) {
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
+  if (row.item_type === 'song') {
+    item.song = row.song || null;
+  }
   if (row.item_type === 'multiple_choice') {
     item.multipleChoice = {
       question: row.question,
@@ -147,10 +150,18 @@ async function listPublic(req, res, next) {
     const itemResult = await pool.query(
       `SELECT i.id, i.module_id, i.item_type, i.song_id, i.title, i.instructions,
               i.sort_order, i.active, i.created_at, i.updated_at,
-              mc.question, mc.options, mc.explanation
+              mc.question, mc.options, mc.explanation,
+              CASE WHEN s.id IS NOT NULL THEN json_build_object(
+                'id', s.id, 'title', s.title, 'artist', s.artist,
+                'difficulty', s.difficulty, 'bpm', s.bpm,
+                'tablature', s.tablature, 'content', s.content,
+                'active', s.active, 'sortOrder', s.sort_order
+              ) END AS song
        FROM learning_module_items i
        LEFT JOIN learning_multiple_choice mc ON mc.item_id = i.id
+       LEFT JOIN songs s ON s.id = i.song_id AND s.active = TRUE
        WHERE i.module_id = ANY($1) AND i.active = TRUE
+         AND (i.item_type <> 'song' OR s.id IS NOT NULL)
        ORDER BY i.module_id ASC, i.sort_order ASC, i.created_at ASC`,
       [ids]
     );
@@ -223,13 +234,14 @@ async function updateModule(req, res, next) {
 }
 
 async function createItem(req, res, next) {
-  const client = await pool.connect();
+  let client;
   try {
     if (!FIXED_TRIVIA_IDS.has(req.params.id)) {
       return res.status(404).json({ error: 'Modulo nao encontrado.' });
     }
     const payload = validateItem(req.body);
     if (payload.error) return res.status(400).json({ error: payload.error });
+    client = await pool.connect();
     await client.query('BEGIN');
     if (payload.itemType === 'song') {
       const song = await client.query('SELECT id FROM songs WHERE id = $1 FOR KEY SHARE', [payload.songId]);
@@ -266,18 +278,19 @@ async function createItem(req, res, next) {
     await client.query('COMMIT');
     return res.status(201).json(toPublicItem(itemResult.rows[0]));
   } catch (error) {
-    await client.query('ROLLBACK');
+    if (client) await client.query('ROLLBACK').catch(() => {});
     return next(error);
   } finally {
-    client.release();
+    if (client) client.release();
   }
 }
 
 async function updateItem(req, res, next) {
-  const client = await pool.connect();
+  let client;
   try {
     const payload = validateItem(req.body);
     if (payload.error) return res.status(400).json({ error: payload.error });
+    client = await pool.connect();
     await client.query('BEGIN');
     if (payload.itemType === 'song') {
       const song = await client.query('SELECT id FROM songs WHERE id = $1 FOR KEY SHARE', [payload.songId]);
@@ -319,10 +332,10 @@ async function updateItem(req, res, next) {
     await client.query('COMMIT');
     return res.json(toPublicItem(itemResult.rows[0]));
   } catch (error) {
-    await client.query('ROLLBACK');
+    if (client) await client.query('ROLLBACK').catch(() => {});
     return next(error);
   } finally {
-    client.release();
+    if (client) client.release();
   }
 }
 

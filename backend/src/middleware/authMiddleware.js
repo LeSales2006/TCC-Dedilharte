@@ -18,8 +18,16 @@ async function authenticateToken(req, res, next) {
     return res.status(500).json({ error: 'JWT_SECRET nao configurado.' });
   }
 
+  let payload;
   try {
-    const payload = jwt.verify(token, secret);
+    payload = jwt.verify(token, secret, { algorithms: ['HS256'] });
+    if (typeof payload.sub !== 'string' || !payload.sub.trim()) {
+      return res.status(401).json({ error: 'Token de autenticacao invalido.' });
+    }
+  } catch (error) {
+    return res.status(401).json({ error: 'Token de autenticacao invalido.' });
+  }
+  try {
     const result = await pool.query(
       `SELECT id, role, account_status, token_version
        FROM users
@@ -44,7 +52,8 @@ async function authenticateToken(req, res, next) {
     };
     return next();
   } catch (error) {
-    return res.status(401).json({ error: 'Token de autenticacao invalido.' });
+    // Database outages must not invalidate an otherwise valid session.
+    return next(error);
   }
 }
 

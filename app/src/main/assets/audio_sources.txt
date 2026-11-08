@@ -1,14 +1,11 @@
-Guitar sample source registered for Dedilharte
-
-Recommended source: University of Iowa Electronic Music Studios, Musical Instrument Samples - Guitar.
-Origin: https://theremin.music.uiowa.edu/MISguitar.html
-General license statement: https://theremin.music.uiowa.edu/mis.html
-License terms stated by the source: recordings may be downloaded and used for any projects, without restrictions.
-
-Expected Android resource names for SoundPool:
-app/src/main/res/raw/guitar_e2.wav
-app/src/main/res/raw/guitar_f2.wav
-...
-app/src/main/res/raw/guitar_e4.wav
-
-The app does not fall back to beeps or synthetic tones when samples are missing.
+Dedilharte uses only the bundled Meta Steel Guitar OGG samples.
+Inventory: guitar/manifest.json (source WAV names map to ogg/*.ogg).
+String, pitch and velocity map: guitar/meta-steel-guitar.sfz, channels 2-7.
+Velocity layers: 1-48 / 49-96 / 97-127. Default exercise velocity: 80.
+Low E fret 7 uses the SFZ A#2 recording one semitone up.
+Frets 21-24 extend the nearest recording on the same string locally.
+Short samples use SoundPool; long samples stream from APK assets through MediaPlayer.
+If SoundPool rejects a sample or does not confirm loading within five seconds,
+the same local OGG falls back to MediaPlayer. Loading never starts playback by itself.
+The cache holds at most 24 samples, preparing three events ahead and preserving ringing strings.
+There are no audio downloads, remote URLs or online fallbacks.

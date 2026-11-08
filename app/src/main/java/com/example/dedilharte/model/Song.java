@@ -91,6 +91,14 @@ public final class Song {
         return inQueue;
     }
 
+    public boolean isActive() {
+        return PUBLISHED.equals(status) && inQueue;
+    }
+
+    public Song withActive(boolean active) {
+        return copy(queueOrder, active, active ? PUBLISHED : ARCHIVED);
+    }
+
     public String getStatus() {
         return status;
     }

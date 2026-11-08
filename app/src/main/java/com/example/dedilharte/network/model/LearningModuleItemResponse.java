@@ -5,6 +5,7 @@ public final class LearningModuleItemResponse {
     public String moduleId;
     public String itemType;
     public String songId;
+    public SongResponse song;
     public String title;
     public String instructions;
     public int sortOrder;

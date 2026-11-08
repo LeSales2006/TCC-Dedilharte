@@ -16,6 +16,8 @@ public final class ProgressStore {
     private static final String INITIALIZED = "initial_state_created";
     private static final String PREFIX = "completed_";
     private static final String UPDATED_PREFIX = "updated_at_";
+    private static final String LAST_LESSON = "last_lesson_";
+    private static final String LAST_MODULE = "last_module_";
 
     private final SharedPreferences preferences;
     private String userId;
@@ -43,6 +45,22 @@ public final class ProgressStore {
             return true;
         }
         return userId.startsWith("legacy_") && preferences.getBoolean(PREFIX + lessonId, false);
+    }
+
+    // Store identifiers only. Remote lesson content is always revalidated by the API.
+    public void rememberLesson(String moduleId, String lessonId) {
+        preferences.edit()
+                .putString(LAST_LESSON + userId, lessonId)
+                .putString(LAST_MODULE + userId, moduleId == null ? "" : moduleId)
+                .apply();
+    }
+
+    public String lastLessonId() {
+        return preferences.getString(LAST_LESSON + userId, "");
+    }
+
+    public String lastModuleId() {
+        return preferences.getString(LAST_MODULE + userId, "");
     }
 
     public void setCompleted(String lessonId, boolean completed) {
@@ -97,6 +115,8 @@ public final class ProgressStore {
                     && key.startsWith(PREFIX)
                     && !key.startsWith(userPrefix);
             if (key.equals(initializedKey())
+                    || key.equals(LAST_LESSON + userId)
+                    || key.equals(LAST_MODULE + userId)
                     || key.startsWith(userPrefix)
                     || key.startsWith(UPDATED_PREFIX + userId + "_")
                     || legacyProgressKey) {
@@ -116,6 +136,8 @@ public final class ProgressStore {
         String initialized = INITIALIZED + "_" + resolvedUserId;
         for (String key : preferences.getAll().keySet()) {
             if (key.equals(initialized)
+                    || key.equals(LAST_LESSON + resolvedUserId)
+                    || key.equals(LAST_MODULE + resolvedUserId)
                     || key.startsWith(userPrefix)
                     || key.startsWith(UPDATED_PREFIX + resolvedUserId + "_")) {
                 editor.remove(key);

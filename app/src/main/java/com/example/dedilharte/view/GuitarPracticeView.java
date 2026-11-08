@@ -212,6 +212,10 @@ public class GuitarPracticeView extends View {
         return events.size();
     }
 
+    public List<TablatureEvent> getEvents() {
+        return java.util.Collections.unmodifiableList(events);
+    }
+
     public TablatureEvent getCurrentTabEvent() {
         return currentEvent();
     }

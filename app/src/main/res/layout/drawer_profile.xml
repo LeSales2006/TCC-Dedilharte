@@ -69,6 +69,16 @@
         android:background="#D2FFFFFF" />
 
     <TextView
+        android:id="@+id/drawerHome"
+        style="@style/DrawerMenuItem"
+        android:text="Início" />
+
+    <TextView
+        android:id="@+id/drawerCourse"
+        style="@style/DrawerMenuItem"
+        android:text="Minha trilha" />
+
+    <TextView
         android:id="@+id/drawerProgress"
         style="@style/DrawerMenuItem"
         android:text="Seu progresso" />
