@@ -74,6 +74,7 @@ import com.example.dedilharte.network.model.UserResponse;
 import com.example.dedilharte.sync.DedilharteSyncManager;
 import com.example.dedilharte.view.GuitarPracticeView;
 import com.example.dedilharte.view.ProgressDashboardView;
+import com.example.dedilharte.view.MaterialIcons;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -107,13 +108,14 @@ public class MainActivity extends AppCompatActivity {
     private static final String ROLE_STUDENT = "student";
     private static final String MODULE_TRIVIA_BEGINNER = "module_trivia_beginner";
     private static final String MODULE_TRIVIA_INTERMEDIATE = "module_trivia_intermediate";
-    private static final int TEAL = Color.rgb(50, 150, 145);
-    private static final int DARK = Color.rgb(27, 79, 76);
-    private static final int CYAN = Color.rgb(84, 214, 221);
-    private static final int PALE = Color.rgb(137, 201, 211);
-    private static final int SOFT = Color.rgb(232, 246, 246);
-    private static final int TEXT = Color.rgb(35, 66, 64);
+    private int TEAL;
+    private int DARK;
+    private int CYAN;
+    private int PALE;
+    private int SOFT;
+    private int TEXT;
     private static final int WHITE = Color.WHITE;
+    private int PAGE, PAGE_TEXT, PAGE_BODY, PAGE_ACCENT;
 
     private static final class Arpeggio {
         private final String id;
@@ -211,6 +213,7 @@ public class MainActivity extends AppCompatActivity {
         MODULE_MANAGEMENT,
         PROGRESS,
         SETTINGS,
+        EDIT_PROFILE,
         ABOUT
     }
 
@@ -245,6 +248,8 @@ public class MainActivity extends AppCompatActivity {
     private int weeklyGoal = 3;
     private boolean soundEnabled = true;
     private ImageView profilePhotoPreview;
+    private Call<UserResponse> profileSaveCall;
+    private int editingWeeklyGoal;
     private final List<LearningModuleResponse> dynamicModules = new ArrayList<>();
     private boolean remotePhotoRequested;
 
@@ -253,8 +258,19 @@ public class MainActivity extends AppCompatActivity {
         themeStore = new ThemeStore(this);
         themeStore.applySavedMode();
         super.onCreate(savedInstanceState);
+        TEAL = getColor(R.color.theme_teal);
+        DARK = getColor(R.color.theme_header);
+        CYAN = getColor(R.color.theme_cyan);
+        PALE = getColor(R.color.theme_pale);
+        SOFT = getColor(R.color.theme_card);
+        TEXT = getColor(R.color.theme_body);
+        PAGE = getColor(R.color.theme_page);
+        PAGE_TEXT = getColor(R.color.theme_page_text);
+        PAGE_BODY = getColor(R.color.theme_page_body);
+        PAGE_ACCENT = getColor(R.color.theme_page_accent);
         setVolumeControlStream(android.media.AudioManager.STREAM_MUSIC);
         setContentView(R.layout.activity_main);
+        com.example.dedilharte.view.WindowInsetsHelper.activity(this);
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
@@ -272,6 +288,10 @@ public class MainActivity extends AppCompatActivity {
 
         profile = getSharedPreferences("dedilharte_profile", MODE_PRIVATE);
         migrateLegacyProfileIfNeeded();
+        if (getIntent().getBooleanExtra("request_notifications", false)) {
+            getIntent().removeExtra("request_notifications");
+            com.example.dedilharte.auth.NotificationPermissions.requestIfNeeded(this);
+        }
         currentUserId = sessionManager.getUserId();
         if (currentUserId.trim().isEmpty()) {
             sessionManager.clearSession();
@@ -311,6 +331,15 @@ public class MainActivity extends AppCompatActivity {
             synchronizeCurrentUser(false);
             showProgress();
         }
+        if (savedInstanceState != null && sessionManager.isLoggedIn()) {
+            String previous = savedInstanceState.getString("screen", "");
+            if (Screen.SETTINGS.name().equals(previous)) showSettings();
+            if (Screen.EDIT_PROFILE.name().equals(previous)) {
+                showEditProfile();
+                editingWeeklyGoal = savedInstanceState.getInt("editing_weekly_goal", weeklyGoal);
+                updateGoalLabel(findViewById(R.id.editGoalValue), editingWeeklyGoal);
+            }
+        }
     }
 
     @Override
@@ -319,6 +348,7 @@ public class MainActivity extends AppCompatActivity {
         outState.putString("level", level);
         outState.putString("course_level", courseLevel);
         outState.putString("screen", screen.name());
+        if (screen == Screen.EDIT_PROFILE) outState.putInt("editing_weekly_goal", editingWeeklyGoal);
         if (currentLesson != null) {
             outState.putString("lesson_id", currentLesson.getId());
         }
@@ -506,8 +536,12 @@ public class MainActivity extends AppCompatActivity {
         if (syncManager == null || currentUserId.trim().isEmpty()) {
             return;
         }
-        syncActiveUser();
-        syncManager.fetchRemoteUser(currentUserId, this::applyRemoteUserIfNewer);
+        // Profile edits are explicit server-confirmed writes; opening the app must not
+        // upload an older profile over changes made on another device.
+        final String profileOwner = currentUserId, profileToken = sessionManager.getToken();
+        syncManager.fetchRemoteUser(currentUserId, user -> {
+            if (isCurrentProgressSession(profileOwner, profileToken)) applyRemoteUserIfNewer(user);
+        });
         syncAllProgress(includeAllProgress);
         final String progressOwner = currentUserId;
         final String progressToken = sessionManager.getToken();
@@ -548,13 +582,15 @@ public class MainActivity extends AppCompatActivity {
         if (remoteUser == null
                 || remoteUser.id == null
                 || !remoteUser.id.equals(currentUserId)
-                || remoteUser.updatedAtMillis <= activeUserUpdatedAt()) {
+                || remoteUser.updatedAtMillis <= profile.getLong(accountKey(currentUserId, "server_updated_at"), 0)) {
             return;
         }
         userName = remoteUser.name == null ? userName : remoteUser.name;
         if (remoteUser.role != null) {
             userRole = remoteUser.role;
         }
+        sessionManager.updatePreferences(remoteUser.initialLevel, remoteUser.songGoal, remoteUser.notificationsEnabled);
+        profile.edit().putLong(accountKey(currentUserId, "server_updated_at"), remoteUser.updatedAtMillis).apply();
         weeklyGoal = StudentMetrics.clampGoal(remoteUser.weeklyGoal);
         setActiveUserUpdatedAt(remoteUser.updatedAtMillis);
         saveActiveProfile();
@@ -671,6 +707,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         new AlertDialog.Builder(this)
+                .setIcon(MaterialIcons.dialogWarning(this))
                 .setTitle("Excluir sua conta?")
                 .setMessage("Seu perfil e progresso serão removidos permanentemente.\nEsta ação não pode ser desfeita.")
                 .setNegativeButton("Cancelar", null)
@@ -771,7 +808,7 @@ public class MainActivity extends AppCompatActivity {
         EditText nameInput = input("", "Digite seu nome");
         page.addView(nameInput, matchWrap(0, 18));
 
-        TextView continueButton = button("CRIAR CONTA", WHITE, DARK, 62);
+        TextView continueButton = button("CRIAR CONTA", WHITE, DARK, 62, R.drawable.ic_ms_person);
         continueButton.setOnClickListener(v -> {
             String typed = nameInput.getText().toString().trim();
             if (typed.isEmpty()) {
@@ -811,26 +848,26 @@ public class MainActivity extends AppCompatActivity {
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(24), dp(24), dp(24), dp(32));
-        content.addView(text("Olá, " + firstName() + "!", 18, TEAL, true, Gravity.START, 0, 8));
-        content.addView(text("Continuar de onde parou", 27, DARK, true, Gravity.START, 0, 16));
+        content.addView(text("Olá, " + firstName() + "!", 18, PAGE_ACCENT, true, Gravity.START, 0, 8));
+        content.addView(text("Continuar de onde parou", 27, PAGE_TEXT, true, Gravity.START, 0, 16));
         LinearLayout resume = column(WHITE, Gravity.TOP);
         content.addView(resume, matchWrap(0, 24));
-        content.addView(text("Músicas que você pode gostar", 23, DARK, true, Gravity.START, 0, 8));
+        content.addView(text("Músicas que você pode gostar", 23, PAGE_TEXT, true, Gravity.START, 0, 8));
         content.addView(text("Sugestões pelo seu nível e pelas músicas que já aprendeu.",
-                15, TEXT, false, Gravity.START, 0, 16));
+                15, PAGE_BODY, false, Gravity.START, 0, 16));
         LinearLayout recommendations = column(WHITE, Gravity.TOP);
-        recommendations.addView(text("Carregando músicas…", 16, TEXT, false, Gravity.START, 0, 12));
+        recommendations.addView(text("Carregando músicas…", 16, PAGE_BODY, false, Gravity.START, 0, 12));
         content.addView(recommendations, matchWrap(0, 16));
-        TextView repertoire = button("VER TODAS AS MÚSICAS", DARK, WHITE, 52);
+        TextView repertoire = button("VER TODAS AS MÚSICAS", DARK, WHITE, 52, R.drawable.ic_ms_library_music);
         repertoire.setOnClickListener(v -> showSongs());
         content.addView(repertoire, matchWrap(0, 24));
-        TextView beginner = button("TRIVIA INICIANTE", CYAN, WHITE, 52);
+        TextView beginner = button("TRIVIA INICIANTE", CYAN, WHITE, 52, R.drawable.ic_ms_school);
         beginner.setOnClickListener(v -> openFixedTriviaModule(MODULE_TRIVIA_BEGINNER, "Trivia Iniciante"));
         content.addView(beginner, matchWrap(0, 12));
-        TextView intermediate = button("TRIVIA INTERMEDIÁRIO", DARK, WHITE, 52);
+        TextView intermediate = button("TRIVIA INTERMEDIÁRIO", DARK, WHITE, 52, R.drawable.ic_ms_quiz);
         intermediate.setOnClickListener(v -> openFixedTriviaModule(MODULE_TRIVIA_INTERMEDIATE, "Trivia Intermediário"));
         content.addView(intermediate, matchWrap(0, 12));
-        TextView refresh = button("ATUALIZAR", SOFT, DARK, 48);
+        TextView refresh = button("ATUALIZAR", SOFT, DARK, 48, R.drawable.ic_ms_refresh);
         refresh.setOnClickListener(v -> showHome());
         content.addView(refresh, matchWrap(0, 0));
         scroll.addView(content);
@@ -842,7 +879,7 @@ public class MainActivity extends AppCompatActivity {
             recommendations.removeAllViews();
             if (!success) {
                 recommendations.addView(text(songs.isEmpty() ? error : "Exibindo músicas salvas. " + error,
-                        16, TEXT, false, Gravity.START, 0, 12));
+                        16, PAGE_BODY, false, Gravity.START, 0, 12));
                 if (songs.isEmpty()) return;
             }
             List<Song> suggested = SongRepository.recommendations(songs, songProgressStore.learnedSongIds(), level);
@@ -854,7 +891,7 @@ public class MainActivity extends AppCompatActivity {
             }
             if (suggested.isEmpty()) {
                 recommendations.addView(text("Nenhuma nova música disponível no momento.",
-                        16, TEXT, false, Gravity.START, 0, 12));
+                        16, PAGE_BODY, false, Gravity.START, 0, 12));
             }
         });
     }
@@ -870,7 +907,7 @@ public class MainActivity extends AppCompatActivity {
             resume.addView(infoCard("Sua próxima lição", "Escolha uma Trivia para continuar."));
             return;
         }
-        resume.addView(text("Carregando sua última lição…", 16, TEXT, false, Gravity.START, 0, 12));
+        resume.addView(text("Carregando sua última lição…", 16, PAGE_BODY, false, Gravity.START, 0, 12));
         DedilharteApiClient.service().getModules().enqueue(new Callback<LearningModuleListResponse>() {
             @Override
             public void onResponse(Call<LearningModuleListResponse> call, Response<LearningModuleListResponse> response) {
@@ -975,28 +1012,29 @@ public class MainActivity extends AppCompatActivity {
         content.setPadding(dp(24), dp(24), dp(24), dp(36));
 
         content.addView(statusPill(
-                progressStore.isCompleted(lesson.getId()) ? "CONCLUÍDA ✓" : lesson.getLevel().toUpperCase(Locale.ROOT),
-                progressStore.isCompleted(lesson.getId()) ? PALE : CYAN
+                progressStore.isCompleted(lesson.getId()) ? "CONCLUÍDA" : lesson.getLevel().toUpperCase(Locale.ROOT),
+                progressStore.isCompleted(lesson.getId()) ? PALE : CYAN,
+                progressStore.isCompleted(lesson.getId()) ? R.drawable.ic_ms_check_circle : R.drawable.ic_ms_school
         ), wrapStart(0, 16));
-        content.addView(text(lesson.getTitle(), 29, DARK, true, Gravity.START, 0, 8));
-        content.addView(text(lesson.getSubtitle(), 16, TEAL, true, Gravity.START, 0, 24));
+        content.addView(text(lesson.getTitle(), 29, PAGE_TEXT, true, Gravity.START, 0, 8));
+        content.addView(text(lesson.getSubtitle(), 16, PAGE_ACCENT, true, Gravity.START, 0, 24));
 
         content.addView(infoCard("OBJETIVO", lesson.getObjective()), matchWrap(0, 14));
         content.addView(infoCard("COMO FUNCIONA", lesson.getTheory()), matchWrap(0, 20));
 
-        content.addView(text("Passo a passo", 21, DARK, true, Gravity.START, 0, 12));
+        content.addView(text("Passo a passo", 21, PAGE_TEXT, true, Gravity.START, 0, 12));
         String[] steps = lesson.getSteps();
         for (int i = 0; i < steps.length; i++) {
             content.addView(stepCard(i + 1, steps[i]), matchWrap(0, 10));
         }
 
-        content.addView(text("Padrão do exercício", 21, DARK, true, Gravity.START, 14, 8));
+        content.addView(text("Padrão do exercício", 21, PAGE_TEXT, true, Gravity.START, 14, 8));
         content.addView(infoCard(
                 lesson.getChord(),
                 "Cordas: " + patternToText(lesson.getPattern()) + "\nVelocidade sugerida: " + lesson.getBpm() + " BPM"
         ), matchWrap(0, 18));
 
-        TextView practiceButton = button("ABRIR MODO TREINO", DARK, WHITE, 62);
+        TextView practiceButton = button("ABRIR MODO TREINO", DARK, WHITE, 62, R.drawable.ic_ms_play_arrow);
         practiceButton.setOnClickListener(v -> showPractice(
                 lesson.getTitle(),
                 lesson.getChord(),
@@ -1018,11 +1056,13 @@ public class MainActivity extends AppCompatActivity {
     private TextView completionButton(Lesson lesson) {
         boolean completed = progressStore.isCompleted(lesson.getId());
         TextView button = button(
-                completed ? "AULA CONCLUÍDA ✓" : "MARCAR COMO CONCLUÍDA",
+                completed ? "AULA CONCLUÍDA" : "MARCAR COMO CONCLUÍDA",
                 completed ? PALE : CYAN,
                 WHITE,
                 62
         );
+        button.setPadding(dp(14), dp(8), dp(14), dp(8));
+        MaterialIcons.leading(button, R.drawable.ic_ms_check_circle, completed ? PALE : CYAN);
         button.setOnClickListener(v -> {
             boolean newState = !progressStore.isCompleted(lesson.getId());
             progressStore.setCompleted(lesson.getId(), newState);
@@ -1058,8 +1098,8 @@ public class MainActivity extends AppCompatActivity {
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(20), dp(18), dp(20), dp(28));
-        content.addView(text(title, 25, DARK, true, Gravity.START, 0, 4));
-        content.addView(text(chord, 15, TEAL, true, Gravity.START, 0, 6));
+        content.addView(text(title, 25, PAGE_TEXT, true, Gravity.START, 0, 4));
+        content.addView(text(chord, 15, PAGE_ACCENT, true, Gravity.START, 0, 6));
 
         practiceView = new GuitarPracticeView(this);
         practiceView.setPattern(pattern);
@@ -1071,13 +1111,13 @@ public class MainActivity extends AppCompatActivity {
 
         TextView status = text(
                 "Corda " + pattern[0] + " • " + fingerForString(pattern[0]),
-                16, DARK, true, Gravity.CENTER, 0, 12
+                16, PAGE_TEXT, true, Gravity.CENTER, 0, 12
         );
         content.addView(status);
 
         TextView bpmLabel = text(
                 suggestedBpm + " BPM",
-                17, TEAL, true, Gravity.CENTER, 0, 4
+                17, PAGE_ACCENT, true, Gravity.CENTER, 0, 4
         );
         content.addView(bpmLabel);
 
@@ -1119,7 +1159,7 @@ public class MainActivity extends AppCompatActivity {
         controls.setOrientation(LinearLayout.HORIZONTAL);
         controls.setWeightSum(2f);
         TextView startPause = button("INICIAR", DARK, WHITE, 58);
-        TextView reset = button("REINICIAR", CYAN, WHITE, 58);
+        TextView reset = button("REINICIAR", CYAN, WHITE, 58, R.drawable.ic_ms_replay);
         LinearLayout.LayoutParams halfLeft = new LinearLayout.LayoutParams(0, -2, 1f);
         halfLeft.setMargins(0, 0, dp(6), 0);
         LinearLayout.LayoutParams halfRight = new LinearLayout.LayoutParams(0, -2, 1f);
@@ -1217,13 +1257,13 @@ public class MainActivity extends AppCompatActivity {
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(20), dp(18), dp(20), dp(28));
-        content.addView(text(song.getTitle(), 25, DARK, true, Gravity.START, 0, 4));
-        content.addView(text(song.getArtist() + "  •  " + song.getDifficulty(), 15, TEAL, true, Gravity.START, 0, 10));
-        content.addView(text("BPM recomendado: " + song.getRecommendedBpm(), 15, TEXT, false, Gravity.START, 0, 10));
+        content.addView(text(song.getTitle(), 25, PAGE_TEXT, true, Gravity.START, 0, 4));
+        content.addView(text(song.getArtist() + "  •  " + song.getDifficulty(), 15, PAGE_ACCENT, true, Gravity.START, 0, 10));
+        content.addView(text("BPM recomendado: " + song.getRecommendedBpm(), 15, PAGE_BODY, false, Gravity.START, 0, 10));
 
-        TextView state = text("Carregando sons...", 15, DARK, true, Gravity.CENTER, 0, 8);
-        TextView bpmLabel = text("BPM selecionado: " + selectedBpm[0], 17, TEAL, true, Gravity.CENTER, 0, 4);
-        TextView progress = text("Nota 1 de 1", 14, TEXT, true, Gravity.CENTER, 0, 8);
+        TextView state = text("Carregando sons...", 15, PAGE_TEXT, true, Gravity.CENTER, 0, 8);
+        TextView bpmLabel = text("BPM selecionado: " + selectedBpm[0], 17, PAGE_ACCENT, true, Gravity.CENTER, 0, 4);
+        TextView progress = text("Nota 1 de 1", 14, PAGE_BODY, true, Gravity.CENTER, 0, 8);
         content.addView(state);
         content.addView(bpmLabel);
 
@@ -1235,7 +1275,7 @@ public class MainActivity extends AppCompatActivity {
         practiceParams.setMargins(0, dp(2), 0, dp(8));
         content.addView(practiceView, practiceParams);
 
-        TextView status = text("Pronto para iniciar", 16, DARK, true, Gravity.CENTER, 0, 12);
+        TextView status = text("Pronto para iniciar", 16, PAGE_TEXT, true, Gravity.CENTER, 0, 12);
         content.addView(status);
         content.addView(progress);
 
@@ -1250,12 +1290,13 @@ public class MainActivity extends AppCompatActivity {
         bpmRow.addView(full, weightButton(4, 0));
         content.addView(bpmRow, matchWrap(0, 10));
 
-        TextView customMode = text("Personalizado", 13, DARK, true, Gravity.CENTER, 0, 8);
+        TextView customMode = text("Personalizado", 13, PAGE_TEXT, true, Gravity.CENTER, 0, 8);
         customMode.setBackground(roundRect(SOFT, 18));
+        if (ThemeStore.isNight(this)) customMode.setTextColor(DARK);
         customMode.setPadding(dp(12), dp(7), dp(12), dp(7));
         content.addView(customMode, matchWrap(0, 6));
 
-        TextView customValue = text(selectedBpm[0] + " BPM", 20, TEAL, true, Gravity.CENTER, 0, 6);
+        TextView customValue = text(selectedBpm[0] + " BPM", 20, PAGE_ACCENT, true, Gravity.CENTER, 0, 6);
         customValue.setContentDescription("BPM personalizado, " + selectedBpm[0] + " BPM");
         content.addView(customValue, matchWrap(0, 2));
 
@@ -1277,12 +1318,15 @@ public class MainActivity extends AppCompatActivity {
         controls.setOrientation(LinearLayout.HORIZONTAL);
         controls.setGravity(Gravity.CENTER);
         controls.setWeightSum(3f);
-        TextView previous = button("⏪", SOFT, DARK, 58);
-        TextView startPause = button(guitarSoundPlayer.isReady() ? "▶" : "Tentar novamente", DARK, WHITE, 58);
-        TextView next = button("⏩", SOFT, DARK, 58);
+        TextView previous = button("", SOFT, DARK, 58);
+        TextView startPause = button(guitarSoundPlayer.isReady() ? "" : "Tentar novamente", DARK, WHITE, 58);
+        TextView next = button("", SOFT, DARK, 58);
         previous.setTextSize(24);
         startPause.setTextSize(24);
         next.setTextSize(24);
+        MaterialIcons.iconOnly(previous, R.drawable.ic_ms_skip_previous, SOFT, "Voltar para a nota anterior");
+        MaterialIcons.iconOnly(next, R.drawable.ic_ms_skip_next, SOFT, "Avançar para a próxima nota");
+        if (guitarSoundPlayer.isReady()) MaterialIcons.iconOnly(startPause, R.drawable.ic_ms_play_arrow, DARK, "Continuar música");
         previous.setContentDescription("Voltar para a nota anterior");
         startPause.setContentDescription(guitarSoundPlayer.isReady() ? "Continuar música" : "Tentar novamente");
         next.setContentDescription("Avançar para a próxima nota");
@@ -1290,11 +1334,11 @@ public class MainActivity extends AppCompatActivity {
         controls.addView(startPause, weightButton(6, 6));
         controls.addView(next, weightButton(6, 0));
         content.addView(controls, matchWrap(0, 12));
-        TextView reset = button("Reiniciar", CYAN, WHITE, 52);
+        TextView reset = button("Reiniciar", CYAN, WHITE, 52, R.drawable.ic_ms_replay);
         content.addView(reset, matchWrap(0, 12));
         updatePracticeProgress(progress);
         updateNavigationButtons(previous, next);
-        bindPracticeAudio(state, startPause, "▶");
+        bindPracticeAudio(state, startPause, null);
 
         updateBpmSelection(half, threeQuarter, full, customMode, bpmMode[0]);
         View.OnClickListener bpmChoice = v -> {
@@ -1368,7 +1412,7 @@ public class MainActivity extends AppCompatActivity {
                 if (guitarSoundPlayer != null) {
                     cancelPracticeAudio();
                 }
-                startPause.setText("▶");
+                MaterialIcons.iconOnly(startPause, R.drawable.ic_ms_play_arrow, DARK, "Continuar música");
                 startPause.setContentDescription("Continuar música");
                 state.setText("Finalizado");
                 updatePracticeProgress(progress);
@@ -1384,11 +1428,11 @@ public class MainActivity extends AppCompatActivity {
                     cancelPracticeAudio();
                 }
                 state.setText("Pausado");
-                startPause.setText("▶");
+                MaterialIcons.iconOnly(startPause, R.drawable.ic_ms_play_arrow, DARK, "Continuar música");
                 startPause.setContentDescription("Continuar música");
             } else {
                 practiceView.start();
-                startPause.setText("⏸");
+                MaterialIcons.iconOnly(startPause, R.drawable.ic_ms_pause, DARK, "Pausar música");
                 startPause.setContentDescription("Pausar música");
             }
         });
@@ -1399,7 +1443,7 @@ public class MainActivity extends AppCompatActivity {
             practiceView.moveToPreviousEvent();
             lastPlayedPosition[0] = -1;
             state.setText("Pausado");
-            startPause.setText("▶");
+            MaterialIcons.iconOnly(startPause, R.drawable.ic_ms_play_arrow, DARK, "Continuar música");
             startPause.setContentDescription("Continuar música");
             updatePracticeProgress(progress);
             updateNavigationButtons(previous, next);
@@ -1411,7 +1455,7 @@ public class MainActivity extends AppCompatActivity {
             practiceView.moveToNextEvent();
             lastPlayedPosition[0] = -1;
             state.setText("Pausado");
-            startPause.setText("▶");
+            MaterialIcons.iconOnly(startPause, R.drawable.ic_ms_play_arrow, DARK, "Continuar música");
             startPause.setContentDescription("Continuar música");
             updatePracticeProgress(progress);
             updateNavigationButtons(previous, next);
@@ -1425,7 +1469,13 @@ public class MainActivity extends AppCompatActivity {
             updatePracticeProgress(progress);
             updateNavigationButtons(previous, next);
             state.setText(guitarSoundPlayer == null ? "Erro" : guitarSoundPlayer.statusText());
-            startPause.setText(guitarSoundPlayer != null && guitarSoundPlayer.isReady() ? "▶" : "Tentar novamente");
+            if (guitarSoundPlayer != null && guitarSoundPlayer.isReady()) {
+                MaterialIcons.iconOnly(startPause, R.drawable.ic_ms_play_arrow, DARK, "Continuar música");
+            } else {
+                startPause.setCompoundDrawablesRelative(null, null, null, null);
+                startPause.setTextSize(17);
+                startPause.setText("Tentar novamente");
+            }
             startPause.setContentDescription(guitarSoundPlayer != null && guitarSoundPlayer.isReady()
                     ? "Continuar música"
                     : "Tentar novamente");
@@ -1441,7 +1491,7 @@ public class MainActivity extends AppCompatActivity {
         content.addView(sound, matchWrap(0, 12));
 
         if (item != null) {
-            TextView complete = button("CONCLUIR AULA", CYAN, DARK, 54);
+            TextView complete = button("CONCLUIR AULA", CYAN, DARK, 54, R.drawable.ic_ms_check_circle);
             complete.setOnClickListener(v -> submitModuleProgress(item, null, complete));
             content.addView(complete, matchWrap(0, 12));
         } else {
@@ -1483,19 +1533,19 @@ public class MainActivity extends AppCompatActivity {
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(24), dp(24), dp(24), dp(32));
-        content.addView(text("Biblioteca de arpejos", 28, DARK, true, Gravity.START, 0, 7));
+        content.addView(text("Biblioteca de arpejos", 28, PAGE_TEXT, true, Gravity.START, 0, 7));
         content.addView(text(
                 "Escolha um acorde e pratique o padrão P–I–M–A.",
-                15, TEXT, false, Gravity.START, 0, 22
+                15, PAGE_BODY, false, Gravity.START, 0, 22
         ));
 
-        content.addView(text("Carregando arpejos…", 16, TEXT, false, Gravity.START, 0, 0));
+        content.addView(text("Carregando arpejos…", 16, PAGE_BODY, false, Gravity.START, 0, 0));
         if (arpeggioRepository != null) {
             arpeggioRepository.fetchPublic((items, fromNetwork) -> {
                 if (screen == Screen.ARPEGGIOS && shell.getParent() == root) {
                     renderArpeggioCards(content, fromNetwork || !items.isEmpty() ? items : null);
                     if (!fromNetwork && !items.isEmpty()) {
-                        content.addView(text("Exibindo arpejos salvos neste aparelho.", 14, TEXT, false, Gravity.START, 0, 8));
+                        content.addView(text("Exibindo arpejos salvos neste aparelho.", 14, PAGE_BODY, false, Gravity.START, 0, 8));
                     }
                 }
             });
@@ -1510,12 +1560,12 @@ public class MainActivity extends AppCompatActivity {
         while (content.getChildCount() > 2) {
             content.removeViewAt(2);
         }
-        TextView refresh = button("ATUALIZAR", DARK, WHITE, 48);
+        TextView refresh = button("ATUALIZAR", DARK, WHITE, 48, R.drawable.ic_ms_refresh);
         refresh.setOnClickListener(v -> showArpeggios());
         content.addView(refresh, matchWrap(0, 12));
         if (items == null || items.isEmpty()) {
             content.addView(text(items == null ? "Não foi possível carregar os arpejos." : "Nenhum arpejo cadastrado.",
-                    16, TEXT, false, Gravity.START, 0, 0));
+                    16, PAGE_BODY, false, Gravity.START, 0, 0));
             return;
         }
         List<ArpeggioResponse> source = items;
@@ -1548,12 +1598,12 @@ public class MainActivity extends AppCompatActivity {
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(20), dp(18), dp(20), dp(28));
-        content.addView(text("Arpejo em " + arpeggio.title, 25, DARK, true, Gravity.START, 0, 4));
-        content.addView(text(patternToText(arpeggio.pattern), 15, TEAL, true, Gravity.START, 0, 6));
+        content.addView(text("Arpejo em " + arpeggio.title, 25, PAGE_TEXT, true, Gravity.START, 0, 4));
+        content.addView(text(patternToText(arpeggio.pattern), 15, PAGE_ACCENT, true, Gravity.START, 0, 6));
 
-        TextView state = text("Carregando sons...", 15, DARK, true, Gravity.CENTER, 0, 8);
-        TextView bpmLabel = text("60 BPM", 17, TEAL, true, Gravity.CENTER, 0, 4);
-        TextView progress = text("Nota 1 de 4", 14, TEXT, true, Gravity.CENTER, 0, 8);
+        TextView state = text("Carregando sons...", 15, PAGE_TEXT, true, Gravity.CENTER, 0, 8);
+        TextView bpmLabel = text("60 BPM", 17, PAGE_ACCENT, true, Gravity.CENTER, 0, 4);
+        TextView progress = text("Nota 1 de 4", 14, PAGE_BODY, true, Gravity.CENTER, 0, 8);
         content.addView(state);
         content.addView(bpmLabel);
 
@@ -1566,7 +1616,7 @@ public class MainActivity extends AppCompatActivity {
         practiceParams.setMargins(0, dp(2), 0, dp(8));
         content.addView(practiceView, practiceParams);
 
-        TextView status = text("Pronto para iniciar", 16, DARK, true, Gravity.CENTER, 0, 12);
+        TextView status = text("Pronto para iniciar", 16, PAGE_TEXT, true, Gravity.CENTER, 0, 12);
         content.addView(status);
         content.addView(progress);
 
@@ -1711,7 +1761,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout content = column(TEAL, Gravity.TOP);
         content.setPadding(dp(18), dp(18), dp(18), dp(24));
         EditText search = input("", "Pesquise uma prática");
-        search.setCompoundDrawablesWithIntrinsicBounds(0, 0, android.R.drawable.ic_menu_search, 0);
+        search.setCompoundDrawablesRelative(null, null, MaterialIcons.drawable(this, R.drawable.ic_ms_search, DARK), null);
         content.addView(search, matchWrap(0, 16));
         content.addView(text(
                 "Recomendadas para você, " + firstName() + "!",
@@ -1726,7 +1776,7 @@ public class MainActivity extends AppCompatActivity {
         else renderSongs(results, "", currentSongs);
         TextView syncStatus = text("Atualizando músicas…", 14, WHITE, false, Gravity.START, 0, 8);
         content.addView(syncStatus);
-        TextView refreshSongs = button("ATUALIZAR", DARK, WHITE, 48);
+        TextView refreshSongs = button("ATUALIZAR", DARK, WHITE, 48, R.drawable.ic_ms_refresh);
         refreshSongs.setOnClickListener(v -> showSongs());
         content.addView(refreshSongs, matchWrap(0, 12));
         resultsScroll.addView(results);
@@ -1814,25 +1864,25 @@ public class MainActivity extends AppCompatActivity {
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(24), dp(28), dp(24), dp(32));
-        content.addView(text("PAINEL ADMINISTRATIVO", 25, DARK, true, Gravity.START, 0, 20));
+        content.addView(text("PAINEL ADMINISTRATIVO", 25, PAGE_TEXT, true, Gravity.START, 0, 20));
 
-        TextView songs = button("Gerenciar músicas", DARK, WHITE, 58);
+        TextView songs = button("Gerenciar músicas", DARK, WHITE, 58, R.drawable.ic_ms_library_music);
         songs.setOnClickListener(v -> showAdminSongs());
         content.addView(songs, matchWrap(0, 12));
 
-        TextView arpeggios = button("Gerenciar arpejos", DARK, WHITE, 58);
+        TextView arpeggios = button("Gerenciar arpejos", DARK, WHITE, 58, R.drawable.ic_ms_music_note);
         arpeggios.setOnClickListener(v -> showAdminArpeggios());
         content.addView(arpeggios, matchWrap(0, 12));
 
-        TextView trivia = button("Gerenciar módulos/conteúdo", DARK, WHITE, 58);
+        TextView trivia = button("Gerenciar módulos/conteúdo", DARK, WHITE, 58, R.drawable.ic_ms_school);
         trivia.setOnClickListener(v -> showAdminModules());
         content.addView(trivia, matchWrap(0, 12));
 
-        TextView student = button("Visualizar app como aluno", SOFT, DARK, 54);
+        TextView student = button("Visualizar app como aluno", SOFT, DARK, 54, R.drawable.ic_ms_person);
         student.setOnClickListener(v -> showProgress());
         content.addView(student, matchWrap(0, 12));
 
-        TextView settings = button("Configurações", SOFT, DARK, 54);
+        TextView settings = button("Configurações", SOFT, DARK, 54, R.drawable.ic_ms_settings);
         settings.setOnClickListener(v -> showSettings());
         content.addView(settings, matchWrap(0, 0));
 
@@ -1857,13 +1907,13 @@ public class MainActivity extends AppCompatActivity {
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(24), dp(28), dp(24), dp(32));
-        content.addView(text("PAINEL CONFIGURADOR", 25, DARK, true, Gravity.START, 0, 20));
+        content.addView(text("PAINEL CONFIGURADOR", 25, PAGE_TEXT, true, Gravity.START, 0, 20));
 
-        TextView users = button("Gerenciar usuários", DARK, WHITE, 58);
+        TextView users = button("Gerenciar usuários", DARK, WHITE, 58, R.drawable.ic_ms_group);
         users.setOnClickListener(v -> showUserManagement());
         content.addView(users, matchWrap(0, 12));
 
-        TextView settings = button("Configurações", SOFT, DARK, 54);
+        TextView settings = button("Configurações", SOFT, DARK, 54, R.drawable.ic_ms_settings);
         settings.setOnClickListener(v -> showSettings());
         content.addView(settings, matchWrap(0, 0));
 
@@ -1887,7 +1937,7 @@ public class MainActivity extends AppCompatActivity {
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(24), dp(24), dp(24), dp(32));
-        content.addView(text("Módulos existentes", 24, DARK, true, Gravity.START, 0, 16));
+        content.addView(text("Módulos existentes", 24, PAGE_TEXT, true, Gravity.START, 0, 16));
         LinearLayout list = column(WHITE, Gravity.TOP);
         content.addView(list, matchWrap(0, 0));
         scroll.addView(content);
@@ -1913,12 +1963,12 @@ public class MainActivity extends AppCompatActivity {
     private void renderAdminModules(LinearLayout list, List<LearningModuleResponse> modules) {
         list.removeAllViews();
         if (modules == null) {
-            list.addView(text("Não foi possível carregar os módulos. Tente novamente.", 16, TEXT, false, Gravity.START, 0, 0));
+            list.addView(text("Não foi possível carregar os módulos. Tente novamente.", 16, PAGE_BODY, false, Gravity.START, 0, 0));
             return;
         }
         List<LearningModuleResponse> fixedModules = fixedTriviaModules(modules);
         if (fixedModules.isEmpty()) {
-            list.addView(text("Nenhum módulo encontrado.", 16, TEXT, false, Gravity.START, 0, 0));
+            list.addView(text("Nenhum módulo encontrado.", 16, PAGE_BODY, false, Gravity.START, 0, 0));
             return;
         }
         for (LearningModuleResponse module : fixedModules) {
@@ -1971,10 +2021,10 @@ public class MainActivity extends AppCompatActivity {
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(18), dp(18), dp(18), dp(24));
-        TextView addQuestion = button("+ pergunta", DARK, WHITE, 52);
+        TextView addQuestion = button("pergunta", DARK, WHITE, 52, R.drawable.ic_ms_add);
         addQuestion.setOnClickListener(v -> showModuleMultipleChoiceEditor(module, null));
         content.addView(addQuestion, matchWrap(0, 10));
-        TextView addSong = button("+ música", SOFT, DARK, 52);
+        TextView addSong = button("música", SOFT, DARK, 52, R.drawable.ic_ms_add);
         addSong.setOnClickListener(v -> showModuleSongItemEditor(module, null));
         content.addView(addSong, matchWrap(0, 14));
 
@@ -1989,7 +2039,7 @@ public class MainActivity extends AppCompatActivity {
     private void renderAdminModuleItems(LinearLayout list, LearningModuleResponse module) {
         list.removeAllViews();
         if (module.items == null || module.items.isEmpty()) {
-            list.addView(text("Nenhum item cadastrado neste módulo.", 16, TEXT, false, Gravity.START, 0, 0));
+            list.addView(text("Nenhum item cadastrado neste módulo.", 16, PAGE_BODY, false, Gravity.START, 0, 0));
             return;
         }
         for (LearningModuleItemResponse item : module.items) {
@@ -2027,6 +2077,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void confirmDeactivateModuleItem(LearningModuleResponse module, LearningModuleItemResponse item) {
         new AlertDialog.Builder(this)
+                .setIcon(MaterialIcons.dialogWarning(this))
                 .setTitle("Desativar item?")
                 .setMessage("O item deixará de aparecer para os alunos.")
                 .setNegativeButton("Cancelar", null)
@@ -2036,6 +2087,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void confirmDeleteModuleItem(LearningModuleResponse module, LearningModuleItemResponse item) {
         new AlertDialog.Builder(this)
+                .setIcon(MaterialIcons.dialogWarning(this))
                 .setTitle("Excluir item?")
                 .setMessage("O item sera removido do modulo.")
                 .setNegativeButton("Cancelar", null)
@@ -2103,7 +2155,7 @@ public class MainActivity extends AppCompatActivity {
         content.addView(explanation, matchWrap(0, 10));
         content.addView(sortOrder, matchWrap(0, 12));
 
-        TextView save = button("Salvar", DARK, WHITE, 56);
+        TextView save = button("Salvar", DARK, WHITE, 56, R.drawable.ic_ms_save);
         save.setOnClickListener(v -> saveModuleMultipleChoiceItem(
                 module, existing, title, instructions, question, optionA, optionB, optionC, optionD, correct, explanation, sortOrder, true
         ));
@@ -2146,18 +2198,18 @@ public class MainActivity extends AppCompatActivity {
         EditText sortOrder = input(draft.order, "Ordem");
         sortOrder.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         content.addView(title, matchWrap(0, 10));
-        content.addView(text("Música", 16, DARK, true, Gravity.START, 0, 8));
+        content.addView(text("Música", 16, PAGE_TEXT, true, Gravity.START, 0, 8));
         Spinner selector = simpleSpinner(new String[]{"Selecione uma música"});
         content.addView(selector, matchWrap(0, 10));
-        TextView status = text("Carregando músicas…", 15, TEXT, false, Gravity.START, 0, 10);
+        TextView status = text("Carregando músicas…", 15, PAGE_BODY, false, Gravity.START, 0, 10);
         content.addView(status);
-        TextView retry = button("RECARREGAR MÚSICAS", SOFT, DARK, 48);
+        TextView retry = button("RECARREGAR MÚSICAS", SOFT, DARK, 48, R.drawable.ic_ms_refresh);
         content.addView(retry, matchWrap(0, 10));
-        TextView create = button("+ NOVA MÚSICA", CYAN, DARK, 48);
+        TextView create = button("NOVA MÚSICA", CYAN, DARK, 48, R.drawable.ic_ms_add);
         content.addView(create, matchWrap(0, 10));
         content.addView(instructions, matchWrap(0, 10));
         content.addView(sortOrder, matchWrap(0, 12));
-        TextView save = button("Salvar", DARK, WHITE, 56);
+        TextView save = button("Salvar", DARK, WHITE, 56, R.drawable.ic_ms_save);
         content.addView(save, matchWrap(0, 0));
         scroll.addView(content);
         shell.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -2184,7 +2236,7 @@ public class MainActivity extends AppCompatActivity {
                     labels.add(song.getTitle() + (song.getArtist().trim().isEmpty() ? "" : " - " + song.getArtist()));
                     if (song.getId().equals(draft.songId)) selected = labels.size() - 1;
                 }
-                ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, labels);
+                ArrayAdapter<String> adapter = themedSpinnerAdapter(labels.toArray(new String[0]));
                 adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
                 selector.setAdapter(adapter);
                 selector.setSelection(selected);
@@ -2391,7 +2443,7 @@ public class MainActivity extends AppCompatActivity {
 
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(18), dp(18), dp(18), dp(24));
-        TextView newSong = button("NOVA MÚSICA", DARK, WHITE, 56);
+        TextView newSong = button("NOVA MÚSICA", DARK, WHITE, 56, R.drawable.ic_ms_add);
         content.addView(newSong, matchWrap(0, 12));
         EditText search = input("", "Pesquisar por título");
         content.addView(search, matchWrap(0, 12));
@@ -2411,7 +2463,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout results = column(WHITE, Gravity.TOP);
         final String[] statusFilter = {""};
         final List<Song> currentSongs = new ArrayList<>();
-        results.addView(text("Carregando músicas…", 16, TEXT, false, Gravity.START, 0, 0));
+        results.addView(text("Carregando músicas…", 16, PAGE_BODY, false, Gravity.START, 0, 0));
         scroll.addView(results);
         content.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         shell.addView(content, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -2423,7 +2475,7 @@ public class MainActivity extends AppCompatActivity {
                 if (!fromNetwork) {
                     results.removeAllViews();
                     results.addView(text("Não foi possível carregar as músicas. Reabra esta tela para tentar novamente.",
-                            16, TEXT, false, Gravity.START, 0, 0));
+                            16, PAGE_BODY, false, Gravity.START, 0, 0));
                     return;
                 }
                 currentSongs.addAll(songs);
@@ -2551,7 +2603,7 @@ public class MainActivity extends AppCompatActivity {
         if (shown == 0) {
             results.addView(text(
                     "Nenhuma musica encontrada.",
-                    16, TEXT, false, Gravity.CENTER, 24, 0
+                    16, PAGE_BODY, false, Gravity.CENTER, 24, 0
             ));
         }
     }
@@ -2572,6 +2624,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void confirmDeleteSong(Song song) {
         new AlertDialog.Builder(this)
+                .setIcon(MaterialIcons.dialogWarning(this))
                 .setTitle("Excluir música")
                 .setMessage("Deseja excluir definitivamente \"" + song.getTitle() + "\"?")
                 .setPositiveButton("Excluir", (dialog, which) -> {
@@ -2600,13 +2653,13 @@ public class MainActivity extends AppCompatActivity {
 
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(18), dp(18), dp(18), dp(24));
-        TextView add = button("+ NOVO ARPEJO", DARK, WHITE, 56);
+        TextView add = button("NOVO ARPEJO", DARK, WHITE, 56, R.drawable.ic_ms_add);
         add.setOnClickListener(v -> showArpeggioEditor(null));
         content.addView(add, matchWrap(0, 12));
 
         ScrollView scroll = new ScrollView(this);
         LinearLayout results = column(WHITE, Gravity.TOP);
-        results.addView(text("Carregando arpejos…", 16, TEXT, false, Gravity.START, 0, 0));
+        results.addView(text("Carregando arpejos…", 16, PAGE_BODY, false, Gravity.START, 0, 0));
         scroll.addView(results);
         content.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         shell.addView(content, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -2618,7 +2671,7 @@ public class MainActivity extends AppCompatActivity {
                     if (!fromNetwork) {
                         results.removeAllViews();
                         results.addView(text("Não foi possível carregar os arpejos. Reabra esta tela para tentar novamente.",
-                                16, TEXT, false, Gravity.START, 0, 0));
+                                16, PAGE_BODY, false, Gravity.START, 0, 0));
                         return;
                     }
                     renderAdminArpeggios(results, items);
@@ -2630,7 +2683,7 @@ public class MainActivity extends AppCompatActivity {
     private void renderAdminArpeggios(LinearLayout results, List<ArpeggioResponse> items) {
         results.removeAllViews();
         if (items == null || items.isEmpty()) {
-            results.addView(text("Nenhum arpejo cadastrado.", 16, TEXT, false, Gravity.CENTER, 24, 0));
+            results.addView(text("Nenhum arpejo cadastrado.", 16, PAGE_BODY, false, Gravity.CENTER, 24, 0));
             return;
         }
         for (ArpeggioResponse item : items) {
@@ -2659,6 +2712,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         new AlertDialog.Builder(this)
+                .setIcon(MaterialIcons.dialogWarning(this))
                 .setTitle("Excluir arpejo \"" + safeText(arpeggio.title) + "\"?")
                 .setMessage("Esta acao nao pode ser desfeita.")
                 .setNegativeButton("Cancelar", null)
@@ -2700,23 +2754,23 @@ public class MainActivity extends AppCompatActivity {
         Spinner difficulty = difficultySpinner(existing == null ? Song.EASY : existing.difficulty);
         Switch active = new Switch(this);
         active.setText("Ativo");
-        active.setTextColor(DARK);
+        active.setTextColor(PAGE_TEXT);
         active.setTextSize(16);
         active.setChecked(existing == null || existing.active);
         LinearLayout notesBox = column(WHITE, Gravity.TOP);
-        TextView preview = text("", 13, TEXT, false, Gravity.START, 0, 10);
+        TextView preview = text("", 13, PAGE_BODY, false, Gravity.START, 0, 10);
         preview.setTypeface(Typeface.MONOSPACE);
         Runnable[] renderNotes = new Runnable[1];
         renderNotes[0] = () -> {
             notesBox.removeAllViews();
-            notesBox.addView(text("Notas", 18, DARK, true, Gravity.START, 0, 10));
+            notesBox.addView(text("Notas", 18, PAGE_TEXT, true, Gravity.START, 0, 10));
             for (int i = 0; i < notes.size(); i++) {
                 final int index = i;
                 ArpeggioNote note = notes.get(i);
                 LinearLayout row = new LinearLayout(this);
                 row.setOrientation(LinearLayout.HORIZONTAL);
                 row.setWeightSum(3f);
-                row.addView(text("Corda " + note.string + " | Casa " + note.fret, 15, DARK, true, Gravity.CENTER_VERTICAL, 0, 0), new LinearLayout.LayoutParams(0, dp(46), 2f));
+                row.addView(text("Corda " + note.string + " | Casa " + note.fret, 15, PAGE_TEXT, true, Gravity.CENTER_VERTICAL, 0, 0), new LinearLayout.LayoutParams(0, dp(46), 2f));
                 TextView remove = button("EXCLUIR", Color.rgb(210, 75, 75), WHITE, 42);
                 remove.setOnClickListener(v -> {
                     notes.remove(index);
@@ -2732,7 +2786,7 @@ public class MainActivity extends AppCompatActivity {
         stringInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         EditText fretInput = input("", "Casa 0..");
         fretInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        TextView addNote = button("+ adicionar nota", SOFT, DARK, 48);
+        TextView addNote = button("adicionar nota", SOFT, DARK, 48, R.drawable.ic_ms_add);
         addNote.setOnClickListener(v -> {
             int stringNumber = parseIntOrZero(stringInput.getText().toString());
             int fret = parseIntOrNegative(fretInput.getText().toString());
@@ -2754,9 +2808,9 @@ public class MainActivity extends AppCompatActivity {
         content.addView(fretInput, matchWrap(0, 8));
         content.addView(addNote, matchWrap(0, 12));
         content.addView(notesBox, matchWrap(0, 8));
-        content.addView(text("Preview da tablatura", 16, DARK, true, Gravity.START, 0, 8));
+        content.addView(text("Preview da tablatura", 16, PAGE_TEXT, true, Gravity.START, 0, 8));
         content.addView(preview, matchWrap(0, 12));
-        TextView save = button("SALVAR", DARK, WHITE, 56);
+        TextView save = button("SALVAR", DARK, WHITE, 56, R.drawable.ic_ms_save);
         save.setOnClickListener(v -> saveArpeggio(existing, title, chord, difficulty, active.isChecked(), notes));
         content.addView(save, matchWrap(0, 0));
         renderNotes[0].run();
@@ -2833,7 +2887,7 @@ public class MainActivity extends AppCompatActivity {
         content.addView(bpm, matchWrap(0, 10));
         content.addView(tablature, matchWrap(0, 12));
 
-        TextView preview = text("Prévia ainda não gerada", 13, TEXT, false, Gravity.START, 0, 10);
+        TextView preview = text("Prévia ainda não gerada", 13, PAGE_BODY, false, Gravity.START, 0, 10);
         preview.setTypeface(Typeface.MONOSPACE);
         HorizontalScrollView previewScroll = new HorizontalScrollView(this);
         previewScroll.addView(preview);
@@ -2980,16 +3034,9 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout shell = column(WHITE, Gravity.TOP);
         LinearLayout header = mainHeader();
         shell.addView(header, new LinearLayout.LayoutParams(-1, dp(56)));
-        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(header, (view, insets) -> {
-            int top = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.statusBars()).top;
-            view.setPadding(dp(10), top, dp(12), 0);
-            view.getLayoutParams().height = dp(56) + top;
-            view.requestLayout();
-            return insets;
-        });
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        ProgressDashboardView dashboard = new ProgressDashboardView(this, userName, level, weeklyGoal,
+        ProgressDashboardView dashboard = new ProgressDashboardView(this, userName, level, weeklyGoal, sessionManager.getSongGoal(), sessionManager.getInitialLevel(),
                 () -> openFixedTriviaModule(MODULE_TRIVIA_BEGINNER, "Trivia Iniciante"),
                 () -> openFixedTriviaModule(MODULE_TRIVIA_INTERMEDIATE, "Trivia Intermediário"),
                 this::showProgress);
@@ -2997,7 +3044,6 @@ public class MainActivity extends AppCompatActivity {
         scroll.addView(dashboard);
         shell.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         root.addView(shell, matchMatch());
-        header.post(() -> androidx.core.view.ViewCompat.requestApplyInsets(header));
         dashboardRepository.refresh((data, loading, notice) -> {
             if (isDestroyed() || shell.getParent() != root) return;
             dashboard.render(data, loading, notice);
@@ -3005,7 +3051,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
     private TextView dashboardSectionTitle(String value) {
-        return text(value, 14, TEAL, true, Gravity.START, 6, 10);
+        return text(value, 14, PAGE_ACCENT, true, Gravity.START, 6, 10);
     }
 
     private void showDynamicModule(LearningModuleResponse module) {
@@ -3019,11 +3065,11 @@ public class MainActivity extends AppCompatActivity {
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(16), dp(24), dp(16), dp(32));
-        content.addView(text("Olá, " + firstName() + "!", 18, TEAL, false, Gravity.START, 0, 8));
+        content.addView(text("Olá, " + firstName() + "!", 18, PAGE_ACCENT, false, Gravity.START, 0, 8));
         String moduleLevel = MODULE_TRIVIA_INTERMEDIATE.equals(module.id) ? LessonRepository.INTERMEDIATE : LessonRepository.BEGINNER;
-        content.addView(text("Trilha " + moduleLevel, 30, DARK, false, Gravity.START, 0, 10));
+        content.addView(text("Trilha " + moduleLevel, 30, PAGE_TEXT, false, Gravity.START, 0, 10));
         if (module.description != null && !module.description.trim().isEmpty()) {
-            content.addView(text(module.description, 15, TEXT, false, Gravity.START, 0, 18));
+            content.addView(text(module.description, 15, PAGE_BODY, false, Gravity.START, 0, 18));
         }
         List<LearningModuleItemResponse> lessons = new ArrayList<>();
         if (module.items != null) {
@@ -3038,10 +3084,10 @@ public class MainActivity extends AppCompatActivity {
         resume.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
         resume.setVisibility(View.GONE);
         content.addView(resume, matchWrap(0, 24));
-        content.addView(text("Aulas", 22, DARK, false, Gravity.START, 0, 12));
+        content.addView(text("Aulas", 22, PAGE_TEXT, false, Gravity.START, 0, 12));
         LinearLayout cards = column(WHITE, Gravity.TOP);
         content.addView(cards, matchWrap(0, 16));
-        TextView refresh = button("ATUALIZAR", DARK, WHITE, 48);
+        TextView refresh = button("ATUALIZAR", DARK, WHITE, 48, R.drawable.ic_ms_refresh);
         refresh.setOnClickListener(v -> openFixedTriviaModule(module.id, module.name));
         content.addView(refresh, matchWrap(0, 16));
         content.addView(trackSwitchPanel(moduleLevel), matchWrap(0, 0));
@@ -3050,7 +3096,7 @@ public class MainActivity extends AppCompatActivity {
         root.addView(shell, matchMatch());
         if (lessons.isEmpty()) {
             progress.addView(progressPanel(0, 0, 0));
-            cards.addView(text("Nenhum item ativo neste módulo.", 16, TEXT, false, Gravity.START, 0, 0));
+            cards.addView(text("Nenhum item ativo neste módulo.", 16, PAGE_BODY, false, Gravity.START, 0, 0));
             return;
         }
         progress.addView(infoCard("Seu progresso", "Carregando progresso…"));
@@ -3105,13 +3151,15 @@ public class MainActivity extends AppCompatActivity {
         for (int i = 0; i < lessons.size(); i++) {
             LearningModuleItemResponse item = lessons.get(i);
             boolean done = completed != null && completed.contains(item.id);
-            String status = completed == null ? "STATUS INDISPONÍVEL" : done ? "CONCLUÍDA ✓" : "NÃO CONCLUÍDA";
+            String status = completed == null ? "STATUS INDISPONÍVEL" : done ? "CONCLUÍDA" : "NÃO CONCLUÍDA";
             String title = item.title == null || item.title.trim().isEmpty() ? "Aula" : item.title;
             TextView card = text((i + 1) + "ª AULA  •  " + status + "\n" + title,
                     17, WHITE, false, Gravity.CENTER_VERTICAL, 0, 0);
             card.setPadding(dp(17), dp(12), dp(17), dp(12));
             card.setMinHeight(dp(88));
+            if (ThemeStore.isNight(this)) card.setTextColor(DARK);
             card.setBackground(pressable(done ? PALE : CYAN, DARK, 16, WHITE));
+            MaterialIcons.leading(card, done ? R.drawable.ic_ms_check_circle : R.drawable.ic_ms_school, done ? PALE : CYAN);
             card.setContentDescription("Abrir aula: " + title);
             card.setFocusable(true);
             card.setOnClickListener(v -> showModulePreview(module, item));
@@ -3132,7 +3180,7 @@ public class MainActivity extends AppCompatActivity {
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(20), dp(24), dp(20), dp(32));
-        content.addView(text(item.title == null ? "Aula" : item.title, 29, DARK, true, Gravity.START, 0, 16));
+        content.addView(text(item.title == null ? "Aula" : item.title, 29, PAGE_TEXT, true, Gravity.START, 0, 16));
         if (item.instructions != null && !item.instructions.trim().isEmpty()) {
             content.addView(infoCard("INSTRUÇÕES", item.instructions), matchWrap(0, 16));
         }
@@ -3142,7 +3190,7 @@ public class MainActivity extends AppCompatActivity {
         shell.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         root.addView(shell, matchMatch());
         if ("song".equals(item.itemType)) {
-            preview.addView(text("Carregando conteúdo…", 16, TEXT, false, Gravity.START, 0, 16));
+            preview.addView(text("Carregando conteúdo…", 16, PAGE_BODY, false, Gravity.START, 0, 16));
             if (item.song != null && item.song.isValid() && item.song.isPublished()
                     && item.song.id.equals(item.songId)) {
                 renderModuleSongPreview(preview, module, item, songFromModule(item.song));
@@ -3162,15 +3210,15 @@ public class MainActivity extends AppCompatActivity {
                     preview.addView(text(fromNetwork
                             ? "A música vinculada não está disponível. Verifique a publicação da música."
                             : error,
-                            16, TEXT, false, Gravity.START, 0, 16));
-                    TextView retry = button("TENTAR NOVAMENTE", DARK, WHITE, 50);
+                            16, PAGE_BODY, false, Gravity.START, 0, 16));
+                    TextView retry = button("TENTAR NOVAMENTE", DARK, WHITE, 50, R.drawable.ic_ms_refresh);
                     retry.setOnClickListener(v -> showModulePreview(module, item));
                     preview.addView(retry);
                 });
             }
         } else if (item.multipleChoice != null) {
             preview.addView(infoCard("CONTEÚDO", item.multipleChoice.question), matchWrap(0, 16));
-            TextView start = button("INICIAR AULA", DARK, WHITE, 58);
+            TextView start = button("INICIAR AULA", DARK, WHITE, 58, R.drawable.ic_ms_play_arrow);
             start.setOnClickListener(v -> {
                 start.setVisibility(View.GONE);
                 if (item.multipleChoice.options != null) {
@@ -3184,7 +3232,7 @@ public class MainActivity extends AppCompatActivity {
             });
             preview.addView(start);
         } else {
-            preview.addView(text("Esta aula ainda não tem conteúdo disponível.", 16, TEXT, false, Gravity.START, 0, 0));
+            preview.addView(text("Esta aula ainda não tem conteúdo disponível.", 16, PAGE_BODY, false, Gravity.START, 0, 0));
         }
     }
 
@@ -3195,26 +3243,26 @@ public class MainActivity extends AppCompatActivity {
     private void renderModuleSongPreview(LinearLayout preview, LearningModuleResponse module,
                                          LearningModuleItemResponse item, Song song) {
         preview.removeAllViews();
-        preview.addView(text(song.getTitle(), 23, DARK, true, Gravity.START, 0, 8));
-        preview.addView(text(song.getArtist() + " • " + song.getDifficulty(), 16, TEAL, false, Gravity.START, 0, 8));
-        preview.addView(text("BPM recomendado: " + song.getRecommendedBpm(), 16, TEXT, false, Gravity.START, 0, 16));
+        preview.addView(text(song.getTitle(), 23, PAGE_TEXT, true, Gravity.START, 0, 8));
+        preview.addView(text(song.getArtist() + " • " + song.getDifficulty(), 16, PAGE_ACCENT, false, Gravity.START, 0, 8));
+        preview.addView(text("BPM recomendado: " + song.getRecommendedBpm(), 16, PAGE_BODY, false, Gravity.START, 0, 16));
         if (song.getTablature() == null || song.getTablature().trim().isEmpty()) {
-            preview.addView(text("Esta música ainda não possui tablatura cadastrada.", 16, TEXT, false, Gravity.START, 0, 0));
+            preview.addView(text("Esta música ainda não possui tablatura cadastrada.", 16, PAGE_BODY, false, Gravity.START, 0, 0));
             return;
         }
         try {
             TablatureParser.parse(song.getTablature(), song.getRecommendedBpm(), TablatureParser.DEFAULT_COLUMNS_PER_BEAT);
         } catch (IllegalArgumentException invalid) {
-            preview.addView(text("Tablatura inválida: " + invalid.getMessage(), 16, TEXT, false, Gravity.START, 0, 0));
+            preview.addView(text("Tablatura inválida: " + invalid.getMessage(), 16, PAGE_BODY, false, Gravity.START, 0, 0));
             return;
         }
-        preview.addView(text("Tablatura", 21, DARK, true, Gravity.START, 0, 12));
+        preview.addView(text("Tablatura", 21, PAGE_TEXT, true, Gravity.START, 0, 12));
         HorizontalScrollView tabScroll = new HorizontalScrollView(this);
-        TextView tab = text(song.getTablature(), 16, TEXT, false, Gravity.START, 12, 12);
+        TextView tab = text(song.getTablature(), 16, PAGE_BODY, false, Gravity.START, 12, 12);
         tab.setTypeface(Typeface.MONOSPACE);
         tabScroll.addView(tab);
         preview.addView(tabScroll, matchWrap(0, 20));
-        TextView start = button("INICIAR AULA", DARK, WHITE, 58);
+        TextView start = button("INICIAR AULA", DARK, WHITE, 58, R.drawable.ic_ms_play_arrow);
         start.setOnClickListener(v -> showSongPractice(song, module, item));
         preview.addView(start);
     }
@@ -3231,7 +3279,8 @@ public class MainActivity extends AppCompatActivity {
                         button.setEnabled(true);
                         if (response.isSuccessful()) {
                             dashboardRepository.invalidate();
-                            button.setText(selected == null ? "AULA CONCLUÍDA ✓" : "RESPOSTA ENVIADA ✓");
+                            button.setText(selected == null ? "AULA CONCLUÍDA" : "RESPOSTA ENVIADA");
+                            MaterialIcons.leading(button, R.drawable.ic_ms_check_circle, selected == null ? CYAN : SOFT);
                             if (screen == Screen.PROGRESS) showProgress();
                         } else {
                             Toast.makeText(MainActivity.this, com.example.dedilharte.network.ApiErrors.message(
@@ -3258,21 +3307,28 @@ public class MainActivity extends AppCompatActivity {
 
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
-        content.setPadding(dp(24), dp(26), dp(24), dp(32));
-        content.addView(text("Configurações", 29, DARK, true, Gravity.START, 0, 18));
+        content.setPadding(dp(24), dp(24), dp(24), dp(24));
 
-        TextView editProfile = settingsItem("Editar perfil", DARK);
+        TextView editProfile = settingsItem("Editar perfil", DARK, R.drawable.ic_ms_edit);
         editProfile.setOnClickListener(v -> showEditProfile());
         content.addView(editProfile, matchWrap(0, 12));
 
         LinearLayout darkRow = new LinearLayout(this);
         darkRow.setOrientation(LinearLayout.HORIZONTAL);
         darkRow.setGravity(Gravity.CENTER_VERTICAL);
-        darkRow.setPadding(dp(16), dp(10), dp(12), dp(10));
+        darkRow.setPadding(dp(16), 0, dp(16), 0);
+        darkRow.setMinimumHeight(dp(64));
         darkRow.setBackground(roundRect(SOFT, 14));
         TextView darkLabel = text("Modo noturno", 17, DARK, true, Gravity.CENTER_VERTICAL, 0, 0);
-        darkRow.addView(darkLabel, new LinearLayout.LayoutParams(0, dp(56), 1));
-        Switch darkSwitch = new Switch(this);
+        MaterialIcons.leading(darkLabel, R.drawable.ic_ms_dark_mode, SOFT);
+        darkRow.addView(darkLabel, new LinearLayout.LayoutParams(0, -2, 1));
+        androidx.appcompat.widget.SwitchCompat darkSwitch = new androidx.appcompat.widget.SwitchCompat(this);
+        darkSwitch.setId(R.id.settingsDarkMode);
+        darkSwitch.setMinHeight(dp(48));
+        darkSwitch.setThumbTintList(new android.content.res.ColorStateList(
+                new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}}, new int[]{DARK, WHITE}));
+        darkSwitch.setTrackTintList(new android.content.res.ColorStateList(
+                new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}}, new int[]{TEAL, Color.rgb(105, 132, 130)}));
         darkSwitch.setChecked(themeStore != null && themeStore.isDarkModeEnabled());
         darkSwitch.setContentDescription("Modo noturno");
         darkSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
@@ -3281,13 +3337,14 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         darkRow.addView(darkSwitch, new LinearLayout.LayoutParams(-2, -2));
+        darkRow.setOnClickListener(v -> darkSwitch.toggle());
         content.addView(darkRow, matchWrap(0, 12));
 
-        TextView logoutButton = settingsItem("Sair da conta", DARK);
+        TextView logoutButton = settingsItem("Sair da conta", DARK, R.drawable.ic_ms_logout);
         logoutButton.setOnClickListener(v -> confirmLogout());
         content.addView(logoutButton, matchWrap(0, 12));
 
-        TextView deleteButton = settingsItem("Excluir conta", Color.rgb(188, 48, 48));
+        TextView deleteButton = settingsItem("Excluir conta", ThemeStore.isNight(this) ? Color.rgb(139, 30, 30) : Color.rgb(188, 48, 48), R.drawable.ic_ms_delete);
         deleteButton.setOnClickListener(v -> confirmDeleteAccount());
         content.addView(deleteButton, matchWrap(0, 0));
 
@@ -3298,6 +3355,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void confirmLogout() {
         new AlertDialog.Builder(this)
+                .setIcon(MaterialIcons.dialogWarning(this))
                 .setTitle("Sair da conta?")
                 .setMessage("Sua sessão local será encerrada.")
                 .setNegativeButton("Cancelar", null)
@@ -3319,10 +3377,10 @@ public class MainActivity extends AppCompatActivity {
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(24), dp(24), dp(24), dp(32));
-        content.addView(text("Usuários cadastrados", 24, DARK, true, Gravity.START, 0, 12));
+        content.addView(text("Usuários cadastrados", 24, PAGE_TEXT, true, Gravity.START, 0, 12));
         LinearLayout list = column(WHITE, Gravity.TOP);
         content.addView(list, matchWrap(0, 0));
-        list.addView(text("Carregando usuários...", 16, TEXT, false, Gravity.START, 0, 0));
+        list.addView(text("Carregando usuários...", 16, PAGE_BODY, false, Gravity.START, 0, 0));
         scroll.addView(content);
         shell.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         root.addView(shell, matchMatch());
@@ -3352,17 +3410,17 @@ public class MainActivity extends AppCompatActivity {
 
     private void renderManagedUsersError(LinearLayout list, String message) {
         list.removeAllViews();
-        list.addView(text(message, 16, TEXT, false, Gravity.START, 0, 0));
+        list.addView(text(message, 16, PAGE_BODY, false, Gravity.START, 0, 0));
     }
 
     private void renderManagedUsers(LinearLayout list, List<UserResponse> users) {
         list.removeAllViews();
         if (users == null) {
-            list.addView(text("Não foi possível carregar os usuários.", 16, TEXT, false, Gravity.START, 0, 0));
+            list.addView(text("Não foi possível carregar os usuários.", 16, PAGE_BODY, false, Gravity.START, 0, 0));
             return;
         }
         if (users.isEmpty()) {
-            list.addView(text("Nenhum usuário encontrado.", 16, TEXT, false, Gravity.START, 0, 0));
+            list.addView(text("Nenhum usuário encontrado.", 16, PAGE_BODY, false, Gravity.START, 0, 0));
             return;
         }
         for (UserResponse user : users) {
@@ -3380,7 +3438,7 @@ public class MainActivity extends AppCompatActivity {
 
             Spinner role = managedRoleSpinner(user.role);
             card.addView(role, matchWrap(0, 10));
-            TextView save = button("SALVAR PERFIL", DARK, WHITE, 48);
+            TextView save = button("SALVAR PERFIL", DARK, WHITE, 48, R.drawable.ic_ms_save);
             save.setOnClickListener(v -> updateManagedRole(user, selectedManagedRole(role)));
             card.addView(save, matchWrap(0, 0));
             list.addView(card, matchWrap(0, 12));
@@ -3465,7 +3523,7 @@ public class MainActivity extends AppCompatActivity {
         content.addView(email, matchWrap(0, 10));
         content.addView(password, matchWrap(0, 10));
         content.addView(role, matchWrap(0, 12));
-        TextView save = button("CRIAR", DARK, WHITE, 56);
+        TextView save = button("CRIAR", DARK, WHITE, 56, R.drawable.ic_ms_add);
         save.setOnClickListener(v -> DedilharteApiClient.service().createManagedUser(new ManagedUserRequest(
                 name.getText().toString().trim(),
                 email.getText().toString().trim(),
@@ -3496,7 +3554,7 @@ public class MainActivity extends AppCompatActivity {
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
         content.setPadding(dp(24), dp(24), dp(24), dp(32));
-        content.addView(text("Criar módulo", 24, DARK, true, Gravity.START, 0, 14));
+        content.addView(text("Criar módulo", 24, PAGE_TEXT, true, Gravity.START, 0, 14));
         EditText name = input("", "Nome do módulo");
         Spinner type = simpleSpinner(new String[]{"trivia", "exercises"});
         EditText description = input("", "Descrição");
@@ -3506,7 +3564,7 @@ public class MainActivity extends AppCompatActivity {
         content.addView(type, matchWrap(0, 10));
         content.addView(description, matchWrap(0, 10));
         content.addView(order, matchWrap(0, 12));
-        TextView create = button("Criar módulo", DARK, WHITE, 56);
+        TextView create = button("Criar módulo", DARK, WHITE, 56, R.drawable.ic_ms_add);
         create.setOnClickListener(v -> {
             int sortOrder = parseIntOrZero(order.getText().toString());
             DedilharteApiClient.service().createModule(new LearningModuleRequest(
@@ -3531,7 +3589,7 @@ public class MainActivity extends AppCompatActivity {
             });
         });
         content.addView(create, matchWrap(0, 22));
-        content.addView(text("Módulos ativos", 24, DARK, true, Gravity.START, 0, 16));
+        content.addView(text("Módulos ativos", 24, PAGE_TEXT, true, Gravity.START, 0, 16));
         LinearLayout list = column(WHITE, Gravity.TOP);
         content.addView(list, matchWrap(0, 0));
         fetchDynamicModules(() -> {
@@ -3545,11 +3603,12 @@ public class MainActivity extends AppCompatActivity {
         root.addView(shell, matchMatch());
     }
 
-    private TextView settingsItem(String label, int foreground) {
-        TextView item = text("> " + label, 17, foreground, true, Gravity.CENTER_VERTICAL, 0, 0);
-        item.setMinHeight(dp(58));
-        item.setPadding(dp(16), 0, dp(16), 0);
+    private TextView settingsItem(String label, int foreground, int icon) {
+        TextView item = text(label, 17, foreground, true, Gravity.CENTER_VERTICAL, 0, 0);
+        item.setMinHeight(dp(64));
+        item.setPadding(dp(16), dp(12), dp(16), dp(12));
         item.setBackground(pressable(SOFT, PALE, 14, foreground));
+        MaterialIcons.leading(item, icon, SOFT);
         item.setClickable(true);
         item.setFocusable(true);
         return item;
@@ -3600,7 +3659,8 @@ public class MainActivity extends AppCompatActivity {
         bar.setPadding(dp(10), 0, dp(12), 0);
         bar.setBackgroundColor(DARK);
 
-        TextView menu = text("☰", 38, WHITE, false, Gravity.CENTER, 0, 0);
+        TextView menu = text("", 0, WHITE, false, Gravity.CENTER, 0, 0);
+        MaterialIcons.iconOnly(menu, R.drawable.ic_ms_menu, DARK, "Abrir menu");
         menu.setContentDescription("Abrir menu");
         menu.setOnClickListener(v -> openDrawer());
         bar.addView(menu, new LinearLayout.LayoutParams(dp(58), -1));
@@ -3621,7 +3681,8 @@ public class MainActivity extends AppCompatActivity {
         bar.setPadding(dp(8), 0, dp(14), 0);
         bar.setBackgroundColor(DARK);
 
-        TextView back = text("‹", 46, WHITE, false, Gravity.CENTER, 0, 0);
+        TextView back = text("", 0, WHITE, false, Gravity.CENTER, 0, 0);
+        MaterialIcons.iconOnly(back, R.drawable.ic_ms_arrow_back, DARK, "Voltar");
         back.setContentDescription("Voltar");
         back.setOnClickListener(v -> backAction.run());
         bar.addView(back, new LinearLayout.LayoutParams(dp(58), -1));
@@ -3632,7 +3693,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void openDrawer() {
-        final Dialog dialog = new Dialog(this, android.R.style.Theme_Material_Light_NoActionBar);
+        final Dialog dialog = new Dialog(this, ThemeStore.isNight(this) ? android.R.style.Theme_Material_NoActionBar : android.R.style.Theme_Material_Light_NoActionBar);
         FrameLayout backdrop = new FrameLayout(this);
         backdrop.setBackgroundColor(Color.argb(135, 0, 0, 0));
 
@@ -3725,6 +3786,7 @@ public class MainActivity extends AppCompatActivity {
             window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         }
         dialog.show();
+        com.example.dedilharte.view.WindowInsetsHelper.dialog(dialog);
         if (window != null) {
             window.setLayout(-1, -1);
         }
@@ -3753,10 +3815,10 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout shell = column(WHITE, Gravity.TOP);
         shell.addView(mainHeader(),
                 new LinearLayout.LayoutParams(-1, dp(72)));
-        shell.addView(text(moduleTitle, 24, DARK, true, Gravity.START, 24, 16));
-        TextView status = text("Carregando conteúdo…", 16, TEXT, false, Gravity.START, 24, 24);
+        shell.addView(text(moduleTitle, 24, PAGE_TEXT, true, Gravity.START, 24, 16));
+        TextView status = text("Carregando conteúdo…", 16, PAGE_BODY, false, Gravity.START, 24, 24);
         shell.addView(status);
-        TextView retry = button("TENTAR NOVAMENTE", DARK, WHITE, 48);
+        TextView retry = button("TENTAR NOVAMENTE", DARK, WHITE, 48, R.drawable.ic_ms_refresh);
         retry.setVisibility(View.GONE);
         retry.setOnClickListener(v -> openFixedTriviaModule(moduleId, moduleTitle));
         shell.addView(retry);
@@ -3856,73 +3918,93 @@ public class MainActivity extends AppCompatActivity {
         openFixedTriviaModule(module.id, module.name);
     }
     private void showEditProfile() {
-        final Dialog dialog = new Dialog(this);
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-
-        LinearLayout panel = (LinearLayout) getLayoutInflater().inflate(R.layout.dialog_edit_profile, null, false);
-        TextView close = panel.findViewById(R.id.editClose);
+        stopPractice();
+        screen = Screen.EDIT_PROFILE;
+        root.removeAllViews();
+        LinearLayout shell = column(WHITE, Gravity.TOP);
+        shell.addView(pageHeader("Editar perfil", this::leaveEditProfile), new LinearLayout.LayoutParams(-1, dp(64)));
+        View panel = getLayoutInflater().inflate(R.layout.dialog_edit_profile, null, false);
+        shell.addView(panel, new LinearLayout.LayoutParams(-1, 0, 1));
+        root.addView(shell, matchMatch());
+        com.example.dedilharte.view.PreferencesFields preferences = new com.example.dedilharte.view.PreferencesFields(this, sessionManager.getInitialLevel(), weeklyGoal, sessionManager.getSongGoal(), sessionManager.notificationsEnabled(), false);
+        ((LinearLayout) panel.findViewById(R.id.editPreferences)).addView(preferences);
+        panel.findViewById(R.id.editPassword).setOnClickListener(v -> com.example.dedilharte.view.PasswordDialogs.change(this, DedilharteApiClient.service(), this::logout));
         ImageView avatar = panel.findViewById(R.id.editAvatar);
         TextView photoButton = panel.findViewById(R.id.editPhotoButton);
         EditText name = panel.findViewById(R.id.editName);
         TextView goalMinus = panel.findViewById(R.id.editGoalMinus);
         TextView goalValue = panel.findViewById(R.id.editGoalValue);
         TextView goalPlus = panel.findViewById(R.id.editGoalPlus);
+        MaterialIcons.iconOnly(goalMinus, R.drawable.ic_ms_remove, DARK, "Diminuir meta semanal");
+        MaterialIcons.iconOnly(goalPlus, R.drawable.ic_ms_add, DARK, "Aumentar meta semanal");
         TextView save = panel.findViewById(R.id.editSave);
+        MaterialIcons.leading(photoButton, R.drawable.ic_ms_edit, DARK);
+        // The primary action is text-only; compound icons used to touch the rounded edge.
         TextView cancel = panel.findViewById(R.id.editCancel);
-        final int[] selectedGoal = {StudentMetrics.clampGoal(weeklyGoal)};
+        editingWeeklyGoal = StudentMetrics.clampGoal(weeklyGoal);
 
         profilePhotoPreview = avatar;
         bindProfilePhoto(profilePhotoPreview);
         name.setText(userName);
-        updateGoalLabel(goalValue, selectedGoal[0]);
+        updateGoalLabel(goalValue, editingWeeklyGoal);
 
-        close.setOnClickListener(v -> dialog.dismiss());
         photoButton.setOnClickListener(v -> openProfilePhotoPicker());
         goalMinus.setOnClickListener(v -> {
-            selectedGoal[0] = Math.max(1, selectedGoal[0] - 1);
-            updateGoalLabel(goalValue, selectedGoal[0]);
+            editingWeeklyGoal = Math.max(1, editingWeeklyGoal - 1);
+            updateGoalLabel(goalValue, editingWeeklyGoal);
         });
         goalPlus.setOnClickListener(v -> {
-            selectedGoal[0] = Math.min(7, selectedGoal[0] + 1);
-            updateGoalLabel(goalValue, selectedGoal[0]);
+            editingWeeklyGoal = Math.min(7, editingWeeklyGoal + 1);
+            updateGoalLabel(goalValue, editingWeeklyGoal);
         });
+        final String owner = currentUserId, token = sessionManager.getToken();
         save.setOnClickListener(v -> {
             String typed = name.getText().toString().trim();
-            if (typed.isEmpty()) {
-                name.setError("Digite seu nome");
-                return;
-            }
-            userName = typed;
-            weeklyGoal = selectedGoal[0];
-            markActiveUserUpdated();
-            saveActiveProfile();
-            if (syncManager != null) {
-                syncManager.updateProfile(userName, weeklyGoal, activeUserUpdatedAt(), this::applyRemoteUserIfNewer);
-            }
-            updateCalculatedLevel();
-            dialog.dismiss();
-            if (screen == Screen.SETTINGS) {
-                showSettings();
-            } else if (screen == Screen.PROGRESS) {
-                showProgress();
-            } else {
-                showProgress();
-            }
+            if (typed.length() < 2 || typed.length() > 180) { name.setError("Use de 2 a 180 caracteres"); return; }
+            int songs = preferences.songs(); if (songs < 1) return;
+            com.example.dedilharte.network.model.UserRequest request = new com.example.dedilharte.network.model.UserRequest(owner, typed, editingWeeklyGoal, System.currentTimeMillis());
+            request.initialLevel = preferences.level(); request.songGoal = songs; request.notificationsEnabled = preferences.notifications.isChecked();
+            save.setEnabled(false); save.setText("Salvando…"); name.setEnabled(false); preferences.setInputsEnabled(false);
+            goalMinus.setEnabled(false); goalPlus.setEnabled(false); panel.findViewById(R.id.editPassword).setEnabled(false);
+            retrofit2.Call<UserResponse> call = DedilharteApiClient.service().updateProfile(request, "Bearer " + token); profileSaveCall = call;
+            call.enqueue(new retrofit2.Callback<UserResponse>() {
+                private boolean available() { return isCurrentProgressSession(owner, token) && !isDestroyed()
+                        && screen == Screen.EDIT_PROFILE && shell.getParent() == root; }
+                private void failed(String message) {
+                    if (!available()) return;
+                    save.setEnabled(true); save.setText("Salvar Edições"); name.setEnabled(true); preferences.setInputsEnabled(true);
+                    goalMinus.setEnabled(true); goalPlus.setEnabled(true); panel.findViewById(R.id.editPassword).setEnabled(true);
+                    Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
+                }
+                @Override public void onResponse(retrofit2.Call<UserResponse> call, retrofit2.Response<UserResponse> response) {
+                    if (!available()) return;
+                    UserResponse user = response.body();
+                    if (!response.isSuccessful() || user == null || !owner.equals(user.id)) {
+                        failed(com.example.dedilharte.network.ApiErrors.message(response, "Não foi possível salvar o perfil. Tente novamente.")); return;
+                    }
+                    userName = user.name; weeklyGoal = StudentMetrics.clampGoal(user.weeklyGoal);
+                    sessionManager.updatePreferences(user.initialLevel, user.songGoal, user.notificationsEnabled);
+                    profile.edit().putLong(accountKey(currentUserId, "server_updated_at"), user.updatedAtMillis).apply();
+                    setActiveUserUpdatedAt(user.updatedAtMillis); saveActiveProfile();
+                    dashboardRepository.updateWeeklyGoal(weeklyGoal);
+                    profileSaveCall = null; profilePhotoPreview = null; showProgress();
+                    if (user.notificationsEnabled) com.example.dedilharte.auth.NotificationPermissions.requestIfNeeded(MainActivity.this);
+                }
+                @Override public void onFailure(retrofit2.Call<UserResponse> call, Throwable error) {
+                    if (!call.isCanceled()) failed("Sem conexão. As alterações não foram salvas. Tente novamente.");
+                }
+            });
         });
-        cancel.setOnClickListener(v -> dialog.dismiss());
+        cancel.setOnClickListener(v -> leaveEditProfile());
+    }
 
-        dialog.setContentView(panel);
-        Window window = dialog.getWindow();
-        if (window != null) {
-            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        }
-        dialog.show();
-        if (window != null) {
-            window.setLayout(
-                    (int) (getResources().getDisplayMetrics().widthPixels * .94f),
-                    -2
-            );
-        }
+    private void leaveEditProfile() {
+        if (profileSaveCall != null) profileSaveCall.cancel();
+        profileSaveCall = null;
+        profilePhotoPreview = null;
+        androidx.core.view.WindowCompat.getInsetsController(getWindow(), root)
+                .hide(androidx.core.view.WindowInsetsCompat.Type.ime());
+        showSettings();
     }
 
     private void updateGoalLabel(TextView view, int goal) {
@@ -3959,7 +4041,7 @@ public class MainActivity extends AppCompatActivity {
     }
     private TextView lessonCard(Lesson lesson) {
         boolean completed = progressStore.isCompleted(lesson.getId());
-        String status = completed ? "Concluída ✓" : "Não concluída";
+        String status = completed ? "Concluída" : "Não concluída";
         TextView card = text(
                 lesson.getOrder() + "ª AULA  •  " + status + "\n" + lesson.getTitle(),
                 17,
@@ -3974,7 +4056,9 @@ public class MainActivity extends AppCompatActivity {
         card.setContentDescription(
                 "Aula " + lesson.getOrder() + ", " + lesson.getTitle() + ", " + status
         );
+        if (ThemeStore.isNight(this)) card.setTextColor(DARK);
         card.setBackground(pressable(completed ? PALE : CYAN, DARK, 16, WHITE));
+        MaterialIcons.leading(card, completed ? R.drawable.ic_ms_check_circle : R.drawable.ic_ms_school, completed ? PALE : CYAN);
         return card;
     }
 
@@ -3992,11 +4076,13 @@ public class MainActivity extends AppCompatActivity {
     private TextView songLearnedButton(Song song) {
         boolean learned = songProgressStore != null && songProgressStore.isLearned(song.getId());
         TextView view = button(
-                learned ? "MÚSICA APRENDIDA ✓" : "APRENDI ESTA MÚSICA",
+                learned ? "MÚSICA APRENDIDA" : "APRENDI ESTA MÚSICA",
                 learned ? PALE : CYAN,
                 learned ? DARK : WHITE,
                 54
         );
+        view.setPadding(dp(14), dp(8), dp(14), dp(8));
+        MaterialIcons.leading(view, R.drawable.ic_ms_check_circle, learned ? PALE : CYAN);
         view.setOnClickListener(v -> {
             boolean newValue = songProgressStore == null || !songProgressStore.isLearned(song.getId());
             final String owner = currentUserId;
@@ -4016,9 +4102,10 @@ public class MainActivity extends AppCompatActivity {
                             songProgressRevision++;
                             songProgressStore.setLearned(song.getId(), saved.learned);
                             dashboardRepository.invalidate();
-                            view.setText(saved.learned ? "MÚSICA APRENDIDA ✓" : "APRENDI ESTA MÚSICA");
-                            view.setTextColor(saved.learned ? DARK : WHITE);
+                            view.setText(saved.learned ? "MÚSICA APRENDIDA" : "APRENDI ESTA MÚSICA");
+                            view.setTextColor(ThemeStore.isNight(MainActivity.this) || saved.learned ? DARK : WHITE);
                             view.setBackground(pressable(saved.learned ? PALE : CYAN, DARK, 16, saved.learned ? DARK : WHITE));
+                            MaterialIcons.leading(view, R.drawable.ic_ms_check_circle, saved.learned ? PALE : CYAN);
                             if (screen == Screen.PROGRESS) showProgress();
                         }
                         @Override public void onFailure(Call<SongProgressResponse> call, Throwable error) {
@@ -4058,6 +4145,7 @@ public class MainActivity extends AppCompatActivity {
                 String.valueOf(number), 15, WHITE, true, Gravity.CENTER, 0, 0
         );
         numberView.setBackground(roundRect(TEAL, 24));
+        if (ThemeStore.isNight(this)) numberView.setTextColor(DARK);
         row.addView(numberView, new LinearLayout.LayoutParams(dp(38), dp(38)));
 
         TextView body = text(value, 15, TEXT, false, Gravity.START, 0, 0);
@@ -4067,10 +4155,12 @@ public class MainActivity extends AppCompatActivity {
         return row;
     }
 
-    private TextView statusPill(String label, int color) {
+    private TextView statusPill(String label, int color, int icon) {
         TextView pill = text(label, 12, WHITE, true, Gravity.CENTER, 0, 0);
         pill.setPadding(dp(12), dp(7), dp(12), dp(7));
         pill.setBackground(roundRect(color, 20));
+        if (ThemeStore.isNight(this)) pill.setTextColor(ThemeStore.foreground(this, color));
+        MaterialIcons.leading(pill, icon, color);
         return pill;
     }
 
@@ -4097,7 +4187,8 @@ public class MainActivity extends AppCompatActivity {
     private void bindProfilePhoto(ImageView image) {
         image.clearColorFilter();
         if (profilePhotoUri == null || profilePhotoUri.trim().isEmpty()) {
-            image.setImageResource(android.R.drawable.ic_menu_myplaces);
+            image.setImageDrawable(MaterialIcons.drawable(this, R.drawable.ic_ms_person, DARK));
+            image.setScaleType(ImageView.ScaleType.CENTER);
             image.setColorFilter(DARK);
             fetchRemoteProfilePhoto(image);
             return;
@@ -4111,9 +4202,11 @@ public class MainActivity extends AppCompatActivity {
             if (source == null) {
                 throw new RuntimeException("Foto inválida");
             }
+            image.setScaleType(ImageView.ScaleType.CENTER_CROP);
             image.setImageBitmap(circleCrop(source));
         } catch (Exception ignored) {
-            image.setImageResource(android.R.drawable.ic_menu_myplaces);
+            image.setImageDrawable(MaterialIcons.drawable(this, R.drawable.ic_ms_person, DARK));
+            image.setScaleType(ImageView.ScaleType.CENTER);
             image.setColorFilter(DARK);
         }
     }
@@ -4178,6 +4271,7 @@ public class MainActivity extends AppCompatActivity {
                     Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
                     if (bitmap != null) {
                         image.clearColorFilter();
+                        image.setScaleType(ImageView.ScaleType.CENTER_CROP);
                         image.setImageBitmap(bitmap);
                     }
                 } catch (Exception ignored) {
@@ -4218,7 +4312,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setGravity(gravity);
-        layout.setBackgroundColor(background);
+        layout.setBackgroundColor(background == WHITE || (ThemeStore.isNight(this) && background == TEAL) ? PAGE : background);
         return layout;
     }
 
@@ -4234,7 +4328,7 @@ public class MainActivity extends AppCompatActivity {
         TextView view = new TextView(this);
         view.setText(value);
         view.setTextSize(size);
-        view.setTextColor(color);
+        view.setTextColor(ThemeStore.isNight(this) && color == TEAL ? DARK : color);
         view.setGravity(gravity);
         view.setTypeface(Typeface.create("sans-serif", bold ? Typeface.BOLD : Typeface.NORMAL));
         view.setIncludeFontPadding(false);
@@ -4245,6 +4339,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView button(String label, int background, int foreground, int height) {
         TextView view = text(label, 17, foreground, true, Gravity.CENTER, 0, 0);
         view.setBackground(pressable(background, DARK, 16, foreground));
+        if (ThemeStore.isNight(this)) view.setTextColor(ThemeStore.foreground(this, background == WHITE ? SOFT : background));
         view.setMinHeight(dp(height));
         view.setClickable(true);
         view.setFocusable(true);
@@ -4252,10 +4347,17 @@ public class MainActivity extends AppCompatActivity {
         return view;
     }
 
+    private TextView button(String label, int background, int foreground, int height, int icon) {
+        TextView view = button(label, background, foreground, height);
+        view.setPadding(dp(14), dp(8), dp(14), dp(8));
+        MaterialIcons.leading(view, icon, background);
+        return view;
+    }
+
     private EditText input(String value, String hint) {
         EditText input = new EditText(this);
         input.setTextColor(DARK);
-        input.setHintTextColor(Color.GRAY);
+        input.setHintTextColor(ThemeStore.isNight(this) ? DARK : Color.GRAY);
         input.setTextSize(16);
         input.setSingleLine(true);
         input.setPadding(dp(14), 0, dp(14), 0);
@@ -4269,11 +4371,7 @@ public class MainActivity extends AppCompatActivity {
     private Spinner difficultySpinner(String selectedDifficulty) {
         Spinner spinner = new Spinner(this);
         String[] labels = {"Fácil", "Média", "Difícil"};
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(
-                this,
-                android.R.layout.simple_spinner_item,
-                labels
-        );
+        ArrayAdapter<String> adapter = themedSpinnerAdapter(labels);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinner.setAdapter(adapter);
         String normalized = Song.normalizeDifficulty(selectedDifficulty);
@@ -4289,9 +4387,27 @@ public class MainActivity extends AppCompatActivity {
         return spinner;
     }
 
+    private ArrayAdapter<String> themedSpinnerAdapter(String[] labels) {
+        return new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, labels) {
+            private View tint(View view) {
+                if (ThemeStore.isNight(MainActivity.this)) {
+                    ((TextView) view).setTextColor(DARK);
+                    view.setBackgroundColor(SOFT);
+                }
+                return view;
+            }
+            @Override public View getView(int position, View recycled, android.view.ViewGroup parent) {
+                return tint(super.getView(position, recycled, parent));
+            }
+            @Override public View getDropDownView(int position, View recycled, android.view.ViewGroup parent) {
+                return tint(super.getDropDownView(position, recycled, parent));
+            }
+        };
+    }
+
     private Spinner simpleSpinner(String[] labels) {
         Spinner spinner = new Spinner(this);
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, labels);
+        ArrayAdapter<String> adapter = themedSpinnerAdapter(labels);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinner.setAdapter(adapter);
         return spinner;
@@ -4300,7 +4416,7 @@ public class MainActivity extends AppCompatActivity {
     private Spinner correctAnswerSpinner(int selectedIndex) {
         Spinner spinner = new Spinner(this);
         String[] labels = {"Alternativa A", "Alternativa B", "Alternativa C", "Alternativa D"};
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, labels);
+        ArrayAdapter<String> adapter = themedSpinnerAdapter(labels);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinner.setAdapter(adapter);
         spinner.setSelection(Math.max(0, Math.min(3, selectedIndex)));
@@ -4340,7 +4456,7 @@ public class MainActivity extends AppCompatActivity {
         StateListDrawable states = new StateListDrawable();
         states.addState(
                 new int[]{android.R.attr.state_pressed},
-                borderedRect(pressed, radius, strokeColor, 0)
+                borderedRect(ThemeStore.isNight(this) ? normal : pressed, radius, strokeColor, 0)
         );
         states.addState(
                 new int[]{android.R.attr.state_focused},
@@ -4365,7 +4481,7 @@ public class MainActivity extends AppCompatActivity {
 
     private GradientDrawable roundRect(int color, int radius) {
         GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(color);
+        drawable.setColor(color == WHITE && ThemeStore.isNight(this) ? SOFT : color);
         drawable.setCornerRadius(dp(radius));
         return drawable;
     }
@@ -4413,7 +4529,7 @@ public class MainActivity extends AppCompatActivity {
         }
         lastPlayedPosition[0] = -1;
         state.setText("Pausado");
-        startPause.setText("▶");
+        MaterialIcons.iconOnly(startPause, R.drawable.ic_ms_play_arrow, DARK, "Continuar música");
         startPause.setContentDescription("Continuar música");
     }
 
@@ -4432,8 +4548,8 @@ public class MainActivity extends AppCompatActivity {
             } else if (!view.isRunning()) {
                 state.setText(player.statusText());
                 if (!resumeAfterAudioLoad) {
-                    startPause.setText(playLabel);
-                    startPause.setContentDescription("▶".equals(playLabel) ? "Continuar música"
+                    setPracticePlayIcon(startPause, playLabel);
+                    startPause.setContentDescription(playLabel == null ? "Continuar música"
                             : "PLAY".equals(playLabel) ? "Continuar arpejo" : "Iniciar treino");
                 }
             }
@@ -4441,9 +4557,14 @@ public class MainActivity extends AppCompatActivity {
                 view.pause();
                 cancelPracticeAudio();
                 state.setText(player.statusText());
-                startPause.setText(playLabel);
+                setPracticePlayIcon(startPause, playLabel);
             }
         });
+    }
+
+    private void setPracticePlayIcon(TextView button, String label) {
+        if (label == null) MaterialIcons.iconOnly(button, R.drawable.ic_ms_play_arrow, DARK, "Continuar música");
+        else button.setText(label);
     }
 
     private void cancelPracticeAudio() {
@@ -4519,7 +4640,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void styleBpmOption(TextView view, boolean selected) {
-        view.setTextColor(selected ? WHITE : DARK);
+        view.setTextColor(ThemeStore.isNight(this) ? DARK : selected ? WHITE : DARK);
         view.setBackground(roundRect(selected ? TEAL : SOFT, 18));
         view.setSelected(selected);
     }
@@ -4625,6 +4746,9 @@ public class MainActivity extends AppCompatActivity {
 
     private void handleBackNavigation() {
         switch (screen) {
+            case EDIT_PROFILE:
+                leaveEditProfile();
+                break;
             case HOME:
                 showProgress();
                 break;
@@ -4707,11 +4831,9 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        if (profileSaveCall != null) profileSaveCall.cancel();
         if (dashboardRepository != null) dashboardRepository.cancel();
         stopPractice();
         super.onDestroy();
     }
 }
-
-
-

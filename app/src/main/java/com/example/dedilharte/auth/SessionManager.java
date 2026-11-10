@@ -27,6 +27,7 @@ public final class SessionManager {
             return;
         }
         saveSession(token, user.id, user.name, user.email, user.role, user.weeklyGoal);
+        updatePreferences(user.initialLevel, user.songGoal, user.notificationsEnabled);
     }
 
     public void saveSession(String token, String userId, String name, String email, String role) {
@@ -41,6 +42,9 @@ public final class SessionManager {
                 .putString(KEY_EMAIL, safe(email))
                 .putString(KEY_ROLE, normalizeRole(role))
                 .putInt(KEY_WEEKLY_GOAL, clampWeeklyGoal(weeklyGoal))
+                .putString("initial_level", "beginner")
+                .putInt("song_goal", 10)
+                .putBoolean("notifications_enabled", false)
                 .apply();
     }
 
@@ -84,6 +88,14 @@ public final class SessionManager {
     public boolean isLoggedIn() {
         return !getToken().trim().isEmpty() && !getUserId().trim().isEmpty();
     }
+
+    public void updatePreferences(String level, int songs, boolean notifications) {
+        preferences.edit().putString("initial_level", "intermediate".equals(level) ? level : "beginner")
+                .putInt("song_goal", Math.max(1, songs)).putBoolean("notifications_enabled", notifications).apply();
+    }
+    public String getInitialLevel() { return preferences.getString("initial_level", "beginner"); }
+    public int getSongGoal() { return Math.max(1, preferences.getInt("song_goal", 10)); }
+    public boolean notificationsEnabled() { return preferences.getBoolean("notifications_enabled", false); }
 
     // Only a previously authenticated, unexpired session may open cached content.
     // Server authorization still validates the signature, account and token version.

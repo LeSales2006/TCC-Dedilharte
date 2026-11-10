@@ -2,4 +2,24 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="theme_page">#FFFFFF</color>
+    <color name="theme_header">#1B4F4C</color>
+    <color name="theme_teal">#329691</color>
+    <color name="theme_cyan">#54D6DD</color>
+    <color name="theme_pale">#89C9D3</color>
+    <color name="theme_card">#E8F6F6</color>
+    <color name="theme_card_white">#FFFFFF</color>
+    <color name="theme_ink">#1B4F4C</color>
+    <color name="theme_body">#234240</color>
+    <color name="theme_page_text">#1B4F4C</color>
+    <color name="theme_page_body">#234240</color>
+    <color name="theme_page_accent">#329691</color>
+    <color name="theme_auth_background">#1B4F4C</color>
+    <color name="theme_hint">#496A68</color>
+    <color name="theme_dashboard_card">#E0F6F6</color>
+    <color name="theme_dashboard_gradient">#E9F9F9</color>
+    <color name="theme_badge">#C2ECEB</color>
+    <color name="theme_progress_track">#B9E5E5</color>
+    <color name="theme_diagram_pressed">#7E45D6</color>
+    <color name="theme_drawer_pressed">#329691</color>
 </resources>

@@ -30,6 +30,19 @@ public final class ThemeStore {
         apply(isDarkModeEnabled());
     }
 
+    public static boolean isNight(Context context) {
+        return (context.getResources().getConfiguration().uiMode
+                & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+                == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+    }
+
+    public static int foreground(Context context, int surface) {
+        int ink = context.getColor(com.example.dedilharte.R.color.theme_ink);
+        return androidx.core.graphics.ColorUtils.calculateContrast(ink, surface)
+                >= androidx.core.graphics.ColorUtils.calculateContrast(android.graphics.Color.WHITE, surface)
+                ? ink : android.graphics.Color.WHITE;
+    }
+
     public static void apply(boolean enabled) {
         AppCompatDelegate.setDefaultNightMode(enabled
                 ? AppCompatDelegate.MODE_NIGHT_YES

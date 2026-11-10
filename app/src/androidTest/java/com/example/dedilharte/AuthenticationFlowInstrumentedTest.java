@@ -1,128 +1,49 @@
 package com.example.dedilharte;
-
-import static org.junit.Assert.assertNotNull;
-
-import android.content.Context;
+import static org.junit.Assert.*;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.EditText;
 import android.widget.TextView;
 import androidx.test.core.app.ActivityScenario;
-import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
-
-import org.junit.After;
-import org.junit.Before;
+import com.example.dedilharte.auth.SessionManager;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 
-@RunWith(AndroidJUnit4.class)
-public class AuthenticationFlowInstrumentedTest {
-
-    private Context targetContext;
-
-    @Before
-    public void setUp() {
-        targetContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
-        clearProfile();
-    }
-
-    @After
-    public void tearDown() {
-        clearProfile();
-    }
-
-    @Test
-    public void loginStudentRegistrationAndAdminRegistrationFlow() {
-        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+/** Covers authenticated entry; local admin registration no longer exists. */
+public class AuthenticationFlowInstrumentedTest extends MainActivityEncodingInstrumentedTest {
+    @Test public void loginHasRegistrationAndRecoveryAndNoLocalAdminRegistration() {
+        new SessionManager(InstrumentationRegistry.getInstrumentation().getTargetContext()).clearSession();
+        try (ActivityScenario<LoginActivity> scenario = ActivityScenario.launch(LoginActivity.class)) {
             scenario.onActivity(activity -> {
-                View root = activity.findViewById(R.id.root);
-
-                assertNotNull(findText(root, "Login"));
-                findText(root, "CADASTRAR ALUNO").performClick();
-
-                assertNotNull(findText(root, "Cadastro Aluno"));
-                findInput(root, "Digite seu nome").setText("Teste Aluno");
-                findText(root, "CRIAR CONTA").performClick();
-
-                assertNotNull(findText(root, "INICIANTE"));
-                assertNotNull(findTextContaining(root, "INTERMEDI"));
-
-                activity.onBackPressed();
-                assertNotNull(findText(root, "Login"));
-                findText(root, "CADASTRAR ADMIN").performClick();
-
-                assertNotNull(findText(root, "Cadastro Admin"));
-                findInput(root, "Digite seu nome").setText("Teste Admin");
-                findText(root, "CRIAR ADMIN").performClick();
-
-                assertNotNull(findTextContaining(root, "Administra"));
-                assertNotNull(findTextContaining(root, "NOVA M"));
+                assertNotNull(activity.findViewById(R.id.loginCreateAccount));
+                assertNotNull(activity.findViewById(R.id.loginForgotPassword));
+                assertFalse(text(activity.findViewById(android.R.id.content)).contains("CADASTRAR ADMIN"));
             });
         }
     }
-
-    private void clearProfile() {
-        targetContext.getSharedPreferences("dedilharte_profile", Context.MODE_PRIVATE)
-                .edit()
-                .clear()
-                .commit();
+    @Test public void studentAndAdminEnterCorrectScreensAndAdminPreviewOpensProgress() {
+        SessionManager session = new SessionManager(InstrumentationRegistry.getInstrumentation().getTargetContext());
+        for (String role : new String[]{"student", "admin"}) {
+            session.updateUser("Teste", "test@example.com", role);
+            try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+                scenario.onActivity(activity -> {
+                    View root = activity.findViewById(R.id.root);
+                    assertTrue(text(root).contains("admin".equals(role) ? "Painel administrativo" : "Seu progresso"));
+                    if ("admin".equals(role)) {
+                        assertTrue(click(root, "Visualizar app como aluno"));
+                        assertTrue(text(root).contains("Seu progresso"));
+                    }
+                });
+            }
+        }
     }
-
-    private TextView findText(View view, String value) {
-        TextView result = findTextContaining(view, value);
-        if (result != null && value.contentEquals(result.getText())) {
-            return result;
-        }
-        if (view instanceof ViewGroup) {
-            ViewGroup group = (ViewGroup) view;
-            for (int i = 0; i < group.getChildCount(); i++) {
-                result = findText(group.getChildAt(i), value);
-                if (result != null) {
-                    return result;
-                }
-            }
-        }
-        return null;
+    private static boolean click(View view, String value) {
+        if (view instanceof TextView && value.equalsIgnoreCase(((TextView)view).getText().toString())) return view.performClick();
+        if (view instanceof ViewGroup) for (int i=0; i<((ViewGroup)view).getChildCount(); i++) if (click(((ViewGroup)view).getChildAt(i), value)) return true;
+        return false;
     }
-
-    private TextView findTextContaining(View view, String value) {
-        if (view instanceof TextView) {
-            TextView textView = (TextView) view;
-            CharSequence text = textView.getText();
-            if (text != null && text.toString().contains(value)) {
-                return textView;
-            }
-        }
-        if (view instanceof ViewGroup) {
-            ViewGroup group = (ViewGroup) view;
-            for (int i = 0; i < group.getChildCount(); i++) {
-                TextView result = findTextContaining(group.getChildAt(i), value);
-                if (result != null) {
-                    return result;
-                }
-            }
-        }
-        return null;
-    }
-
-    private EditText findInput(View view, String hint) {
-        if (view instanceof EditText) {
-            EditText editText = (EditText) view;
-            CharSequence currentHint = editText.getHint();
-            if (currentHint != null && hint.contentEquals(currentHint)) {
-                return editText;
-            }
-        }
-        if (view instanceof ViewGroup) {
-            ViewGroup group = (ViewGroup) view;
-            for (int i = 0; i < group.getChildCount(); i++) {
-                EditText result = findInput(group.getChildAt(i), hint);
-                if (result != null) {
-                    return result;
-                }
-            }
-        }
-        return null;
+    private static String text(View view) {
+        String value = view instanceof TextView ? ((TextView)view).getText().toString() : "";
+        if (view instanceof ViewGroup) for (int i=0; i<((ViewGroup)view).getChildCount(); i++) value += "\n" + text(((ViewGroup)view).getChildAt(i));
+        return value;
     }
 }

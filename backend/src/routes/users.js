@@ -8,6 +8,7 @@ const arpeggiosController = require('../controllers/arpeggiosController');
 const modulesController = require('../controllers/modulesController');
 const moduleProgressController = require('../controllers/moduleProgressController');
 const multer = require('multer');
+const { rateLimit } = require('../middleware/rateLimit');
 const {
   authenticateToken,
   requireSelfOrAdmin,
@@ -25,7 +26,7 @@ const upload = multer({
 router.use(authenticateToken);
 
 router.get('/profile', usersController.getProfile);
-router.put('/profile', usersController.updateProfile);
+router.put('/profile', rateLimit('profile-user', 30, 900, req => req.user.id), usersController.updateProfile);
 router.get('/users/me', usersController.getProfile);
 router.put('/users/me/photo', upload.single('photo'), usersController.uploadMyPhoto);
 router.get('/users/me/photo', usersController.getMyPhoto);

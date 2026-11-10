@@ -54,6 +54,8 @@ public final class LoginActivity extends AppCompatActivity {
         sessionManager = new SessionManager(this);
         api = DedilharteApiClient.service();
         setContentView(R.layout.activity_login);
+        com.example.dedilharte.view.WindowInsetsHelper.activity(this);
+        findViewById(R.id.loginForgotPassword).setOnClickListener(v -> com.example.dedilharte.view.PasswordDialogs.forgot(this, api, emailInput.getText().toString()));
 
         emailInput = findViewById(R.id.loginEmail);
         passwordInput = findViewById(R.id.loginPassword);
@@ -183,6 +185,7 @@ public final class LoginActivity extends AppCompatActivity {
     private void setLoading(boolean loading) {
         progressBar.setVisibility(loading ? View.VISIBLE : View.GONE);
         loginButton.setEnabled(!loading);
+        findViewById(R.id.loginForgotPassword).setEnabled(!loading);
         createAccount.setEnabled(!loading);
         emailInput.setEnabled(!loading);
         passwordInput.setEnabled(!loading);

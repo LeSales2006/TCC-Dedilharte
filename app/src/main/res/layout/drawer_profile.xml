@@ -3,7 +3,7 @@
     android:id="@+id/drawerProfile"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#1B4F4C"
+    android:background="@color/theme_header"
     android:orientation="vertical"
     android:paddingTop="23dp"
     android:paddingBottom="12dp">
@@ -72,6 +72,7 @@
 
     <TextView
         android:id="@+id/drawerHome"
+        android:drawableStart="@drawable/ic_ms_home"
         style="@style/DrawerMenuItem"
         android:text="Início" />
 
@@ -83,11 +84,13 @@
 
     <TextView
         android:id="@+id/drawerCourse"
+        android:drawableStart="@drawable/ic_ms_school"
         style="@style/DrawerMenuItem"
         android:text="Minha trilha" />
 
     <TextView
         android:id="@+id/drawerProgress"
+        android:drawableStart="@drawable/ic_ms_bar_chart"
         style="@style/DrawerMenuItem"
         android:text="Seu progresso" />
 
@@ -98,6 +101,7 @@
 
     <TextView
         android:id="@+id/drawerSongs"
+        android:drawableStart="@drawable/ic_ms_library_music"
         style="@style/DrawerMenuItem"
         android:text="Todas as músicas" />
 
@@ -108,6 +112,7 @@
 
     <TextView
         android:id="@+id/drawerTriviaBeginner"
+        android:drawableStart="@drawable/ic_ms_school"
         style="@style/DrawerMenuItem"
         android:text="Trivia Iniciante" />
 
@@ -118,6 +123,7 @@
 
     <TextView
         android:id="@+id/drawerTriviaIntermediate"
+        android:drawableStart="@drawable/ic_ms_quiz"
         style="@style/DrawerMenuItem"
         android:text="Trivia Intermediário" />
 
@@ -128,6 +134,7 @@
 
     <TextView
         android:id="@+id/drawerArpeggios"
+        android:drawableStart="@drawable/ic_ms_music_note"
         style="@style/DrawerMenuItem"
         android:text="Arpejos" />
 
@@ -138,6 +145,7 @@
 
     <TextView
         android:id="@+id/drawerSettings"
+        android:drawableStart="@drawable/ic_ms_settings"
         style="@style/DrawerMenuItem"
         android:text="Configurações" />
 
@@ -149,6 +157,7 @@
 
     <TextView
         android:id="@+id/drawerAdmin"
+        android:drawableStart="@drawable/ic_ms_admin_panel_settings"
         style="@style/DrawerMenuItem"
         android:text="Administração" />
 </LinearLayout>

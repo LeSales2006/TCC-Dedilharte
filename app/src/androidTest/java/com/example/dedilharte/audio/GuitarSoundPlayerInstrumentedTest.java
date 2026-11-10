@@ -88,7 +88,21 @@ public class GuitarSoundPlayerInstrumentedTest {
             player.play(events.get(0));
             android.util.Log.i("GuitarSoundPlayerTest", "Sustained chord started");
         });
-        Thread.sleep(2000);
+        // MediaPlayer starts asynchronously. Wait for actual progress instead of
+        // assuming decoder startup and playback finish within a fixed two seconds.
+        boolean[] advanced = {false};
+        long deadline = android.os.SystemClock.elapsedRealtime() + 8000;
+        while (!advanced[0] && android.os.SystemClock.elapsedRealtime() < deadline) {
+            Thread.sleep(100);
+            ui(() -> {
+                advanced[0] = true;
+                for (Object voice : (Object[]) field(player, "voices")) {
+                    if (voice == null) { advanced[0] = false; continue; }
+                    MediaPlayer media = (MediaPlayer) field(voice, "media");
+                    if (media != null && media.getCurrentPosition() < 1000) advanced[0] = false;
+                }
+            });
+        }
         ui(() -> {
             for (Object voice : (Object[]) field(player, "voices")) {
                 MediaPlayer media = (MediaPlayer) field(voice, "media");

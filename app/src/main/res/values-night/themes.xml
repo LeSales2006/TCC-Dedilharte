@@ -1,7 +1,40 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Base.Theme.Dedilharte" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your dark theme here. -->
-        <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
+<resources>
+    <style name="Theme.Dedilharte" parent="Base.Theme.Dedilharte">
+        <item name="android:colorBackground">@color/theme_page</item>
+        <item name="android:windowBackground">@color/theme_page</item>
+        <item name="android:statusBarColor">@color/theme_header</item>
+        <item name="android:navigationBarColor">@color/theme_header</item>
+        <item name="android:textColorPrimary">#FFFFFF</item>
+        <item name="android:textColorSecondary">#FFFFFF</item>
+        <item name="colorSurface">@color/theme_page</item>
+        <item name="colorOnSurface">#FFFFFF</item>
+        <item name="colorOnSurfaceVariant">#FFFFFF</item>
+        <item name="colorPrimary">@color/theme_cyan</item>
+        <item name="colorOnPrimary">@color/theme_ink</item>
+        <item name="colorPrimaryContainer">@color/theme_card</item>
+        <item name="colorOnPrimaryContainer">@color/theme_ink</item>
+        <item name="colorSecondary">@color/theme_pale</item>
+        <item name="colorOnSecondary">@color/theme_ink</item>
+        <item name="colorSecondaryContainer">@color/theme_header</item>
+        <item name="colorOnSecondaryContainer">#FFFFFF</item>
+        <item name="colorTertiary">@color/theme_cyan</item>
+        <item name="colorAccent">@color/theme_cyan</item>
+        <item name="android:colorAccent">@color/theme_cyan</item>
+        <item name="android:alertDialogTheme">@style/Theme.Dedilharte.PasswordDialog</item>
+    </style>
+    <style name="Theme.Dedilharte.PasswordDialog" parent="android:style/Theme.Material.Dialog.Alert">
+        <item name="android:colorAccent">@color/theme_cyan</item>
+        <item name="android:colorBackground">@color/theme_page</item>
+        <item name="android:windowBackground">@color/theme_page</item>
+        <item name="android:textColorPrimary">#FFFFFF</item>
+        <item name="android:textColorSecondary">#FFFFFF</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:buttonBarPositiveButtonStyle">@style/Theme.Dedilharte.DialogButton</item>
+        <item name="android:buttonBarNegativeButtonStyle">@style/Theme.Dedilharte.DialogButton</item>
+        <item name="android:buttonBarNeutralButtonStyle">@style/Theme.Dedilharte.DialogButton</item>
+    </style>
+    <style name="Theme.Dedilharte.DialogButton" parent="android:style/Widget.Material.Button.Borderless">
+        <item name="android:textColor">@color/theme_cyan</item>
     </style>
 </resources>

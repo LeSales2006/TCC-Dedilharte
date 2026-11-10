@@ -33,9 +33,9 @@ public class GuitarPracticeView extends View {
         void onFinished();
     }
 
-    private static final int DARK = Color.rgb(27, 79, 76);
-    private static final int CYAN = Color.rgb(84, 214, 221);
-    private static final int PRESSED_STRING = Color.rgb(126, 69, 214);
+    private int DARK;
+    private int CYAN;
+    private int PRESSED_STRING;
     private static final int NEXT_PREVIEW = Color.argb(64, 80, 80, 80);
     private static final int INACTIVE_STRING = Color.BLACK;
     private static final int FRET = Color.rgb(38, 38, 38);
@@ -111,10 +111,13 @@ public class GuitarPracticeView extends View {
     }
 
     private void initialize() {
+        DARK = getContext().getColor(com.example.dedilharte.R.color.theme_ink);
+        CYAN = getContext().getColor(com.example.dedilharte.R.color.theme_cyan);
+        PRESSED_STRING = getContext().getColor(com.example.dedilharte.R.color.theme_diagram_pressed);
         setMinimumHeight(dp(560));
         setContentDescription("Diagrama interativo das casas e cordas do violao");
         setFocusable(true);
-        setBackgroundColor(Color.WHITE);
+        setBackgroundColor(getContext().getColor(com.example.dedilharte.R.color.theme_card_white));
         setPattern(pattern);
     }
 

@@ -157,8 +157,8 @@ public class DashboardInstrumentedTest extends MainActivityEncodingInstrumentedT
                     assertEquals("APRENDI ESTA MÚSICA", button.getText().toString());
                     offline = false; button.performClick();
                     assertTrue(new SongProgressStore(context, "debug-user").isLearned(song.getId()));
-                    assertEquals("MÚSICA APRENDIDA ✓", button.getText().toString());
-                    assertTrue(text(activity.findViewById(R.id.root)).contains("1 de 3"));
+                    assertEquals("MÚSICA APRENDIDA", button.getText().toString());
+                    assertTrue(text(activity.findViewById(R.id.root)).contains("1 de 10 músicas • meta pessoal"));
                 } catch (Exception error) { throw new AssertionError(error); }
             });
         }
@@ -204,7 +204,7 @@ public class DashboardInstrumentedTest extends MainActivityEncodingInstrumentedT
             scenario.onActivity(activity -> {
                 String visible = text(activity.findViewById(R.id.root));
                 assertFalse(visible.contains("Aguardando")); assertFalse(visible.contains("—"));
-                assertTrue(visible.contains("Nível atual: Iniciante"));
+                assertTrue(visible.contains("Nível calculado: Iniciante"));
                 assertTrue(visible.contains("0%")); assertTrue(visible.contains("0 aulas concluídas"));
                 offline = false; completed = 0;
                 tap(activity, "ATUALIZAR");

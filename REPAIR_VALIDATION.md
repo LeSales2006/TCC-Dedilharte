@@ -320,9 +320,147 @@ Alterações anteriores de telas, áudio e outros recursos foram preservadas.
   mensagem de erro do Render, sem segredos; nenhum acesso a credenciais ou
   dados de produção, implantação, commit ou push foi realizado nesta etapa.
 
+## Padronização de ícones — 08/11/2026
+
+- Adicionados 30 VectorDrawable/XML locais de Material Symbols Outlined do
+  repositório oficial Google: `app/src/main/res/drawable/ic_ms_*.xml`.
+  Origem, adaptações e licença Apache-2.0 em
+  `assets/material_symbols_sources.txt` e `material_symbols_LICENSE.txt`.
+  Os vetores somam aproximadamente 23 KB, sem fontes ou novas dependências.
+- Novo `view/MaterialIcons.java` centraliza tamanho de 24dp, tintas, ícones
+  junto ao texto e botões acessíveis somente com imagem. Sobre turquesa claro,
+  a imagem branca usa base verde-escura e desenho de 20dp para contraste de
+  pelo menos 3:1. Fundos claros recebem ícones verde-escuros; fundos escuros
+  recebem brancos. Ícones direcionais respeitam RTL.
+- `MainActivity.java` e `ProgressDashboardView.java`: símbolos decorativos
+  substituídos no cabeçalho, retorno, dashboard, controles de música, conclusão,
+  busca, foto padrão, configurações, administração e avisos de confirmação.
+  Play/pausa permanecem vinculados ao estado da reprodução. Não existe um
+  serviço de notificações do sistema no aplicativo atual; os avisos existentes
+  foram tratados sem introduzir uma funcionalidade nova.
+- `drawer_profile.xml`, `dialog_edit_profile.xml` e `values/styles.xml`:
+  ícones locais no menu, fechar e ajustar meta, espaçamentos consistentes e
+  toque de 48dp no botão de fechar. Logotipo, fotos reais, textos funcionais,
+  descrições de acessibilidade e dados musicais foram preservados.
+- Testes ajustados: `DashboardInstrumentedTest.java` e
+  `GuitarPracticeAudioInstrumentedTest.java`. Novo
+  `MaterialIconsInstrumentedTest.java` verifica tamanho, desenho monocromático,
+  contraste, centralização, descrições e temas claro/escuro. A paleta fixa
+  existente do dashboard foi mantida nos dois temas, sem redesenhar o tema.
+- Validação: **31 testes instrumentados aprovados**, incluindo menu, dashboard,
+  navegação, aluno/admin e reprodução/pausa/silêncio offline nos três modos de
+  treino. Após a correção de centralização, **3 testes específicos passaram
+  novamente**, cobrindo os dois temas, contraste e áudio. **32 testes unitários
+  aprovados**. Busca por emojis/símbolos decorativos no Java/XML concluída;
+  código de cifras, tablaturas e exercícios não foi alterado.
+- Evidências: `build/material-icons-instrumentation.log`,
+  `build/material-icons-final-instrumentation.log`,
+  `build/material-icons-final-gradle.log`, `build/material-icons-light.png` e
+  `build/material-icons-dark.png`. Capturas usam exclusivamente dados simulados.
+- Nenhum arquivo de backend, banco de dados ou logotipo foi alterado.
+  Sem commit/push. Testes executados somente no pacote isolado do emulador.
+- Build final aprovado com JDK 21: `assembleDebug`, `assembleDebugAndroidTest`,
+  `testDebugUnitTest` e `lintDebug`; lint com **0 erros e 173 avisos**.
+  `git diff --check` aprovado. Pacotes de teste removidos. APK com o ID original
+  em `app/build/outputs/apk/debug/app-debug.apk`; app do usuário não substituído.
+
 ## Pendências atualizadas — 07/11/2026
 
 - Conferir os seis exercícios reais e o esquema implantado. Continua sem `DATABASE_URL` configurada. O bloqueio anterior da revisão automática ao uso do JWT salvo foi respeitado: foi solicitada autorização específica para consultas de leitura, ainda sem resposta nesta continuação. Nenhum token do usuário foi acessado e as consultas autenticadas não foram executadas.
 - Aplicar a migration revisada e publicar o backend somente com autorização. O APK continua apontando para o Render; alterações locais não corrigem automaticamente o servidor implantado.
 - Resolver a interceptação HTTPS pelo AVG no ambiente de desenvolvimento. O emissor AVG foi reconfirmado em 07/11 no Windows; a validação TLS do app permanece ativa.
 - `C:/Users/VAIO/.continue/config.yaml` pertence à ferramenta de desenvolvimento e não configura Retrofit/PostgreSQL; não foi modificado.
+
+## Cadastro, perfil, metas e senhas — 08–09/11/2026
+
+- Cadastro em duas etapas: dados de acesso e personalização. Botão ciano
+  `#54D6DD` com texto verde-escuro; nível declarado, meta de 1–7 dias,
+  meta positiva de músicas e preferência de notificações enviados à API.
+- Perfil salvo somente após confirmação da API. Falhas mantêm o formulário e
+  os últimos dados válidos. Abrir o app não envia mais um perfil local sobre
+  alterações de outro dispositivo. Revisões remotas usam horário do servidor;
+  chamadas de edição e senha mantêm a autorização da sessão de origem.
+- Dashboard: músicas aprendidas/meta pessoal, percentual real limitado a 100%
+  e animação de 600 ms. Trivias e seus IDs permanecem independentes; nível
+  calculado e nível inicial declarado aparecem separadamente.
+- Recuperação com e-mail por Resend, link HTTPS, token aleatório de 256 bits,
+  somente hash SHA-256 persistido, expiração de 30 minutos e uso único em
+  transação. Resposta pública idêntica para e-mails existentes e ausentes.
+  Troca exige senha atual, bcrypt custo 12 e invalida sessões/links anteriores.
+- Migration aditiva, repetível, sem remoção de usuários, aulas ou progresso.
+  Rate limiting persistido no PostgreSQL. Nenhuma migration de produção executada.
+- Insets comuns nas Activities e nos formulários/modais, incluindo teclado;
+  perfil rolável, ícones quadrados de 20–24dp e contraste do nível ajustado.
+  Logo e conteúdo musical preservados. Notificações: preferência persistida e
+  solicitação explícita de permissão no Android 13+.
+
+Arquivos desta etapa (além dos ícones já descritos na etapa anterior):
+
+- Android: `app/src/main/AndroidManifest.xml`;
+  `java/com/example/dedilharte/{LoginActivity,RegisterActivity,MainActivity}.java`;
+  `auth/{SessionManager,NotificationPermissions}.java`;
+  `data/DashboardRepository.java`;
+  `network/{DedilharteApiClient,DedilharteApiService}.java`;
+  `network/model/{AuthenticatedUser,RegisterRequest,UserRequest,UserResponse,PasswordRequest}.java`;
+  `view/{ProgressDashboardView,PreferencesFields,PasswordDialogs,WindowInsetsHelper,MaterialIcons}.java`;
+  `res/layout/{activity_login,activity_register,dialog_edit_profile}.xml`;
+  `res/values/profile_ids.xml`. Os caminhos Java/res são relativos a `app/src/main/`.
+- Backend: `backend/.env.example`, `backend/PROFILE_PASSWORDS.md`,
+  `backend/migrations/2026-11-08_profile_passwords.sql`,
+  `backend/src/controllers/{authController,usersController,passwordController}.js`,
+  `backend/src/routes/{auth,users}.js`, `backend/src/server.js`,
+  `backend/src/profilePreferences.js`, `backend/src/resetPasswordPage.js`,
+  `backend/src/middleware/rateLimit.js`, `backend/src/services/resetEmail.js`.
+- Testes: `backend/test/{postgres.integration,profilePasswords.integration}.test.js`;
+  `app/src/androidTest/java/com/example/dedilharte/{AuthenticationFlowInstrumentedTest,ExampleInstrumentedTest,DashboardInstrumentedTest,ProfilePasswordsInstrumentedTest}.java`;
+  `app/src/androidTest/java/com/example/dedilharte/audio/GuitarSoundPlayerInstrumentedTest.java`.
+  O teste de áudio passou a aguardar avanço real do MediaPlayer, com prazo máximo,
+  em vez de supor que a inicialização assíncrona terminaria em dois segundos.
+- Registro: `REPAIR_VALIDATION.md`.
+
+Validação desta etapa:
+
+- **43 testes de backend aprovados**, sem pulos, em PostgreSQL 18 local:
+  cadastro/preferências, atualização, persistência, isolamento, migração
+  repetida, recuperação genérica, envio simulado, hash/expiração, concorrência,
+  reutilização, troca de senha, revogação de sessões e rate limiting.
+  Evidência: `build/profile-backend-final.log`.
+- **32 testes unitários Android aprovados**. A suíte instrumentada ampliada
+  executou 71 testes inicialmente, com 6 falhas. Foram corrigidas expectativas
+  de cadastro local/pacote fixo e esperas dos testes de UI/áudio; todos os casos
+  falhos foram revalidados nas rodadas seguintes. O teste de cadastro antigo
+  foi substituído pela verificação de login e entrada por papel.
+- A rodada final de **10 testes de perfil/cadastro/senhas/insets/permissões e
+  navegação passou integralmente**, incluindo rotação, retorno entre etapas,
+  falha de rede sem sobrescrever estado, revisão remota independente do relógio,
+  metas de músicas e separação de níveis. Ícones nos dois temas e reprodução
+  sustentada também passaram nas reexecuções específicas.
+- Durante a retomada, o emulador apresentou falha do `system_server` e aviso de
+  System UI sem resposta. Foi reiniciado sem apagar seus dados; os testes de UI
+  afetados foram repetidos e passaram. As configurações temporárias de teclado
+  foram restauradas e os dois pacotes isolados removidos.
+- Evidências: `build/profile-all-instrumented.log`,
+  `build/profile-final-retest.log`, `build/profile-final-validation-instrumented.log`
+  e `build/profile-ui-final.log`. As rodadas intermediárias registram as falhas
+  e suas revalidações; não equivalem a uma única execução integral sem falhas.
+- Capturas de dados simulados: `build/profile-dashboard-light.png`,
+  `build/profile-dashboard-dark.png`, `build/profile-register-keyboard-final.png`.
+- Banco de testes local encerrado. Nenhum dado de produção acessado ou alterado.
+- Build final aprovado: `assembleDebug`, `assembleDebugAndroidTest`,
+  `testDebugUnitTest` e `lintDebug`; **0 erros e 179 avisos de lint**.
+  `git diff --check` aprovado. Evidência: `build/profile-final-gradle.log`.
+  APK em `app/build/outputs/apk/debug/app-debug.apk`, com applicationId original
+  `com.example.dedilharte`; não instalado sobre o aplicativo pessoal.
+
+Configuração e homologação pendentes:
+
+- Aplicar migration revisada e publicar backend por procedimento autorizado,
+  antes de distribuir o APK. A API atualmente implantada não recebe as mudanças
+  por este trabalho local.
+- Configurar `RESEND_API_KEY`, `MAIL_FROM` de domínio verificado,
+  `PASSWORD_RESET_BASE_URL` HTTPS apontando para `/api/auth/reset-password`,
+  `TRUST_PROXY_HOPS` conforme topologia, além de `DATABASE_URL` e `JWT_SECRET`.
+  Usar Node.js 20+. Instruções e contratos em `backend/PROFILE_PASSWORDS.md`.
+- Homologar entrega real de e-mail e fluxo com o Render/Aiven atualizado.
+  Os testes de envio usam provedor simulado, sem e-mails reais.
+- Nenhum commit, push ou alteração no aplicativo pessoal instalado.

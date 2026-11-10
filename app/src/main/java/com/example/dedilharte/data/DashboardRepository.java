@@ -55,6 +55,16 @@ public final class DashboardRepository {
         // A confirmed write requires a refresh, but a failed refresh must not erase history.
     }
 
+    /** Called only after the server confirms a profile write. */
+    public void updateWeeklyGoal(int goal) {
+        cancel();
+        DashboardMetrics state = cached();
+        if (state != null) {
+            state.weeklyGoal = Math.max(1, Math.min(7, goal));
+            cache.edit().putString("snapshot", gson.toJson(state)).apply();
+        }
+    }
+
     public void refresh(Listener listener) {
         cancel();
         if (!scope.isCurrent()) return;

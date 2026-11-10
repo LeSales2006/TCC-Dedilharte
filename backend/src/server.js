@@ -6,6 +6,8 @@ require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3000;
+// Set to the known reverse-proxy hop count on Render; never trust arbitrary forwarded headers.
+if (/^[1-9]\d?$/.test(process.env.TRUST_PROXY_HOPS || '')) app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS));
 
 app.use(express.json({ limit: '1mb' }));
 

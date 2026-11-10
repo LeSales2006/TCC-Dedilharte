@@ -50,6 +50,11 @@ public interface DedilharteApiService {
 
     @POST("api/auth/login")
     Call<AuthResponse> login(@Body LoginRequest request);
+    @POST("api/auth/forgot-password")
+    Call<Void> forgotPassword(@Body com.example.dedilharte.network.model.PasswordRequest request);
+    @POST("api/auth/change-password")
+    Call<Void> changePassword(@Body com.example.dedilharte.network.model.PasswordRequest request,
+            @retrofit2.http.Header("Authorization") String authorization);
 
     @GET("api/auth/me")
     Call<AuthResponse> me();
@@ -59,6 +64,9 @@ public interface DedilharteApiService {
 
     @PUT("api/profile")
     Call<UserResponse> updateProfile(@Body UserRequest request);
+
+    @PUT("api/profile")
+    Call<UserResponse> updateProfile(@Body UserRequest request, @retrofit2.http.Header("Authorization") String authorization);
 
     @GET("api/users/me")
     Call<UserResponse> getMe();

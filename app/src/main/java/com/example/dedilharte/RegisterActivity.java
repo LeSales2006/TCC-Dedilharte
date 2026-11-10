@@ -45,6 +45,9 @@ public final class RegisterActivity extends AppCompatActivity {
     private ProgressBar progressBar;
     private TextView loginLink;
     private CheckBox showPassword;
+    private com.example.dedilharte.view.PreferencesFields preferences;
+    private boolean personalizing;
+    private Call<AuthResponse> pendingCall;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,6 +57,9 @@ public final class RegisterActivity extends AppCompatActivity {
         sessionManager = new SessionManager(this);
         api = DedilharteApiClient.service();
         setContentView(R.layout.activity_register);
+        com.example.dedilharte.view.WindowInsetsHelper.activity(this);
+        preferences = new com.example.dedilharte.view.PreferencesFields(this, "beginner", 3, 10, false, true);
+        ((android.widget.LinearLayout)findViewById(R.id.registerPreferences)).addView(preferences);
 
         nameInput = findViewById(R.id.registerName);
         emailInput = findViewById(R.id.registerEmail);
@@ -76,7 +82,16 @@ public final class RegisterActivity extends AppCompatActivity {
             confirmPasswordInput.setSelection(Math.max(0, confirmSelection));
         });
         registerButton.setOnClickListener(v -> register());
-        loginLink.setOnClickListener(v -> finish());
+        registerButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.theme_cyan)));
+        registerButton.setTextColor(getColor(R.color.theme_ink));
+        loginLink.setOnClickListener(v -> { if (personalizing) showStep(false); else finish(); });
+        showStep(savedInstanceState != null && savedInstanceState.getBoolean("personalizing"));
+        getOnBackPressedDispatcher().addCallback(this, new androidx.activity.OnBackPressedCallback(true) {
+            @Override public void handleOnBackPressed() {
+                if (personalizing && (pendingCall == null || registerButton.isEnabled())) showStep(false);
+                else finish();
+            }
+        });
         setLoading(false);
     }
 
@@ -87,13 +102,21 @@ public final class RegisterActivity extends AppCompatActivity {
         String confirmPassword = confirmPasswordInput.getText().toString();
 
         if (!validate(name, email, password, confirmPassword)) {
+            if (personalizing) showStep(false);
             return;
         }
 
+        if (!personalizing) { showStep(true); return; }
+        int songs = preferences.songs(); if (songs < 1) return;
+        RegisterRequest request = new RegisterRequest(name, email, password);
+        request.initialLevel = preferences.level(); request.weeklyGoal = preferences.weeklyGoal.getSelectedItemPosition() + 1;
+        request.songGoal = songs; request.notificationsEnabled = preferences.notifications.isChecked();
         setLoading(true);
-        api.register(new RegisterRequest(name, email, password)).enqueue(new Callback<AuthResponse>() {
+        pendingCall = api.register(request);
+        pendingCall.enqueue(new Callback<AuthResponse>() {
             @Override
             public void onResponse(Call<AuthResponse> call, Response<AuthResponse> response) {
+                if (isFinishing() || isDestroyed() || call.isCanceled()) return;
                 setLoading(false);
                 if (response.isSuccessful() && response.body() != null && response.body().user != null) {
                     sessionManager.saveSession(response.body().token, response.body().user);
@@ -105,6 +128,7 @@ public final class RegisterActivity extends AppCompatActivity {
 
             @Override
             public void onFailure(Call<AuthResponse> call, Throwable t) {
+                if (isFinishing() || isDestroyed() || call.isCanceled()) return;
                 setLoading(false);
                 Log.e(TAG, "cadastro falhou: " + t.getMessage());
                 Toast.makeText(RegisterActivity.this, "Sem conexão com o servidor. Tente novamente.", Toast.LENGTH_LONG).show();
@@ -113,16 +137,16 @@ public final class RegisterActivity extends AppCompatActivity {
     }
 
     private boolean validate(String name, String email, String password, String confirmPassword) {
-        if (name.length() < 2) {
-            nameInput.setError("Digite pelo menos 2 caracteres");
+        if (name.length() < 2 || name.length() > 180) {
+            nameInput.setError("Use de 2 a 180 caracteres");
             return false;
         }
         if (TextUtils.isEmpty(email) || !Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
             emailInput.setError("Digite um e-mail valido");
             return false;
         }
-        if (password.length() < 8 || !password.matches(".*[A-Za-z].*") || !password.matches(".*\\d.*")) {
-            passwordInput.setError("Use 8 caracteres, uma letra e um numero");
+        if (password.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 72 || password.length() < 8 || !password.matches(".*[A-Za-z].*") || !password.matches(".*\\d.*")) {
+            passwordInput.setError("Use 8 caracteres ou mais, uma letra e um número; máximo de 72 bytes");
             return false;
         }
         if (!password.equals(confirmPassword)) {
@@ -141,6 +165,7 @@ public final class RegisterActivity extends AppCompatActivity {
         passwordInput.setEnabled(!loading);
         confirmPasswordInput.setEnabled(!loading);
         showPassword.setEnabled(!loading);
+        preferences.setInputsEnabled(!loading);
     }
 
     private void showError(Response<AuthResponse> response) {
@@ -169,8 +194,18 @@ public final class RegisterActivity extends AppCompatActivity {
         }
     }
 
+    private void showStep(boolean personalize) {
+        personalizing = personalize;
+        for (View view : new View[]{nameInput, emailInput, passwordInput, confirmPasswordInput, showPassword}) view.setVisibility(personalize ? View.GONE : View.VISIBLE);
+        findViewById(R.id.registerPreferences).setVisibility(personalize ? View.VISIBLE : View.GONE);
+        registerButton.setText(personalize ? "CRIAR CONTA" : "CONTINUAR");
+        loginLink.setText(personalize ? "Voltar aos dados" : "Entrar");
+    }
+    @Override protected void onSaveInstanceState(Bundle state) { state.putBoolean("personalizing", personalizing); super.onSaveInstanceState(state); }
+    @Override protected void onDestroy() { if (pendingCall != null) pendingCall.cancel(); super.onDestroy(); }
     private void openMain() {
         Intent intent = new Intent(this, MainActivity.class);
+        intent.putExtra("request_notifications", sessionManager.notificationsEnabled());
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);
         finish();

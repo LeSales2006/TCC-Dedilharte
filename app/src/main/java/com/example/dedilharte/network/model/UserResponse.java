@@ -8,6 +8,9 @@ public final class UserResponse {
     public String temporaryPassword;
     public String role;
     public int weeklyGoal = 3;
+    public String initialLevel = "beginner";
+    public int songGoal = 10;
+    public boolean notificationsEnabled;
     public String accountStatus;
     public boolean mustChangePassword;
     public boolean hasPhoto;

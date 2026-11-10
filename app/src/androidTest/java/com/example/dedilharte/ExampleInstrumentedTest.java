@@ -21,6 +21,7 @@ public class ExampleInstrumentedTest {
     public void useAppContext() {
         // Context of the app under test.
         Context appContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
-        assertEquals("com.example.dedilharte", appContext.getPackageName());
+        assertTrue("Unexpected application under test", "com.example.dedilharte".equals(appContext.getPackageName())
+                || "com.example.dedilharte.navigationtest".equals(appContext.getPackageName()));
     }
 }

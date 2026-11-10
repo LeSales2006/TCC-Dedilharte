@@ -3,10 +3,25 @@
     <style name="Base.Theme.Dedilharte" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:colorAccent">#329691</item>
+        <item name="colorPrimary">#1B4F4C</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#54D6DD</item>
+        <item name="colorOnPrimaryContainer">#1B4F4C</item>
+        <item name="colorSecondary">#329691</item>
+        <item name="colorOnSecondary">#1B4F4C</item>
+        <item name="colorSecondaryContainer">#E8F6F6</item>
+        <item name="colorOnSecondaryContainer">#1B4F4C</item>
+        <item name="colorTertiary">#1B4F4C</item>
+        <item name="colorAccent">#1B4F4C</item>
         <item name="android:navigationBarColor">#1B4F4C</item>
         <item name="android:statusBarColor">#1B4F4C</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
 
     <style name="Theme.Dedilharte" parent="Base.Theme.Dedilharte" />
+    <style name="Theme.Dedilharte.PasswordDialog" parent="android:style/Theme.Material.Light.Dialog.Alert">
+        <item name="android:colorAccent">#1B4F4C</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
 </resources>

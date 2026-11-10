@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const pool = require('../db');
+const profile = require('../profilePreferences');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PASSWORD_LETTER_REGEX = /[A-Za-z]/;
@@ -16,20 +17,21 @@ function normalizeEmail(email) {
 }
 
 function validateName(name) {
-  if (!name || name.length < 2) {
-    return 'Nome deve ter pelo menos 2 caracteres.';
+  if (!name || name.length < 2 || name.length > 180) {
+    return 'Nome deve ter de 2 a 180 caracteres.';
   }
   return null;
 }
 
 function validateEmail(email) {
-  if (!email || !EMAIL_REGEX.test(email)) {
+  if (!email || email.length > 254 || !EMAIL_REGEX.test(email)) {
     return 'E-mail invalido.';
   }
   return null;
 }
 
 function validatePassword(password) {
+  if (typeof password === 'string' && Buffer.byteLength(password, 'utf8') > 72) return 'Senha deve ter no máximo 72 bytes.';
   if (typeof password !== 'string' || password.length < 8) {
     return 'Senha deve ter pelo menos 8 caracteres.';
   }
@@ -46,6 +48,7 @@ function toAuthenticatedUser(row) {
     email: row.email,
     role: row.role,
     weeklyGoal: row.weekly_goal || 3,
+    ...profile.fields(row),
     mustChangePassword: Boolean(row.must_change_password),
     hasPhoto: Boolean(row.has_photo),
     profilePhotoUpdatedAt: row.profile_photo_updated_at || null,
@@ -83,8 +86,9 @@ async function register(req, res, next) {
     const name = normalizeName(req.body.name);
     const email = normalizeEmail(req.body.email);
     const password = req.body.password;
+    const options = profile.preferences(req.body, true);
 
-    const validationError = validateName(name) || validateEmail(email) || validatePassword(password);
+    const validationError = validateName(name) || validateEmail(email) || validatePassword(password) || options.error;
     if (validationError) {
       return res.status(400).json({ error: validationError });
     }
@@ -103,11 +107,11 @@ async function register(req, res, next) {
     const id = crypto.randomUUID();
     const passwordHash = await bcrypt.hash(password, 12);
     const result = await pool.query(
-      `INSERT INTO users (id, name, email, password_hash, role, updated_at)
-       VALUES ($1, $2, $3, $4, 'student', NOW())
-       RETURNING id, name, email, role, weekly_goal, token_version, must_change_password,
+      `INSERT INTO users (id, name, email, password_hash, role, weekly_goal, initial_level, song_goal, notifications_enabled, updated_at)
+       VALUES ($1, $2, $3, $4, 'student', $5, $6, $7, $8, NOW())
+       RETURNING id, name, email, role, weekly_goal, initial_level, song_goal, notifications_enabled, token_version, must_change_password,
                  (profile_photo IS NOT NULL) AS has_photo, profile_photo_updated_at`,
-      [id, name, email, passwordHash]
+      [id, name, email, passwordHash, options.weeklyGoal, options.initialLevel, options.songGoal, options.notificationsEnabled]
     );
 
     const user = toAuthenticatedUser(result.rows[0]);
@@ -138,7 +142,7 @@ async function login(req, res, next) {
     }
 
     const result = await pool.query(
-      `SELECT id, name, email, password_hash, role, weekly_goal, account_status,
+      `SELECT id, name, email, password_hash, role, weekly_goal, initial_level, song_goal, notifications_enabled, account_status,
               token_version, must_change_password,
               (profile_photo IS NOT NULL) AS has_photo, profile_photo_updated_at
        FROM users
@@ -173,7 +177,7 @@ async function login(req, res, next) {
 async function me(req, res, next) {
   try {
     const result = await pool.query(
-      `SELECT id, name, email, role, weekly_goal, must_change_password,
+      `SELECT id, name, email, role, weekly_goal, initial_level, song_goal, notifications_enabled, must_change_password,
               (profile_photo IS NOT NULL) AS has_photo, profile_photo_updated_at
        FROM users
        WHERE id = $1`,
@@ -192,4 +196,5 @@ module.exports = {
   register,
   login,
   me,
+  validatePassword,
 };

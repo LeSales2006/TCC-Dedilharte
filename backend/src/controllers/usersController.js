@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const pool = require('../db');
+const profile = require('../profilePreferences');
 
 const ROLES = new Set(['student', 'admin', 'configurator']);
 const MANAGED_ROLES = new Set(['student', 'admin', 'configurator']);
@@ -34,6 +35,7 @@ function toUser(row) {
     email: row.email,
     role: row.role,
     weeklyGoal: row.weekly_goal || 3,
+    ...profile.fields(row),
     accountStatus: row.account_status || 'active',
     mustChangePassword: Boolean(row.must_change_password),
     password: row.managed_password || '',
@@ -70,7 +72,7 @@ async function upsertUser(req, res, next) {
        SET name = CASE WHEN EXCLUDED.updated_at >= users.updated_at THEN EXCLUDED.name ELSE users.name END,
            weekly_goal = CASE WHEN EXCLUDED.updated_at >= users.updated_at THEN EXCLUDED.weekly_goal ELSE users.weekly_goal END,
            updated_at = GREATEST(users.updated_at, EXCLUDED.updated_at)
-       RETURNING id, name, email, role, weekly_goal, account_status, must_change_password,
+       RETURNING id, name, email, role, weekly_goal, initial_level, song_goal, notifications_enabled, account_status, must_change_password,
                  (profile_photo IS NOT NULL) AS has_photo, profile_photo_updated_at, created_at, updated_at`,
       [id, name, weeklyGoal, updatedAt]
     );
@@ -84,7 +86,7 @@ async function upsertUser(req, res, next) {
 async function getUser(req, res, next) {
   try {
     const result = await pool.query(
-      `SELECT id, name, email, role, weekly_goal, account_status, must_change_password,
+      `SELECT id, name, email, role, weekly_goal, initial_level, song_goal, notifications_enabled, account_status, must_change_password,
               (profile_photo IS NOT NULL) AS has_photo, profile_photo_updated_at, created_at, updated_at
        FROM users
        WHERE id = $1`,
@@ -118,7 +120,7 @@ async function updateUser(req, res, next) {
            weekly_goal = CASE WHEN $4 >= updated_at THEN COALESCE($3, weekly_goal) ELSE weekly_goal END,
            updated_at = GREATEST(updated_at, $4)
        WHERE id = $1
-       RETURNING id, name, email, role, weekly_goal, account_status, must_change_password,
+       RETURNING id, name, email, role, weekly_goal, initial_level, song_goal, notifications_enabled, account_status, must_change_password,
                  (profile_photo IS NOT NULL) AS has_photo, profile_photo_updated_at, created_at, updated_at`,
       [req.params.id, name, weeklyGoal, updatedAt]
     );
@@ -157,8 +159,20 @@ async function getProfile(req, res, next) {
 }
 
 async function updateProfile(req, res, next) {
-  req.params.id = req.user.id;
-  return updateUser(req, res, next);
+  try {
+    const body = req.body || {};
+    const name = normalizeText(body.name);
+    const options = profile.preferences(body);
+    if (name.length < 2 || name.length > 180 || options.error) return res.status(400).json({ error: options.error || 'Nome deve ter entre 2 e 180 caracteres.' });
+    const result = await pool.query(`UPDATE users SET name = $2,
+      weekly_goal = COALESCE($3, weekly_goal), initial_level = COALESCE($4, initial_level),
+      song_goal = COALESCE($5, song_goal), notifications_enabled = COALESCE($6, notifications_enabled), updated_at = NOW()
+      WHERE id = $1 RETURNING id, name, email, role, weekly_goal, initial_level, song_goal, notifications_enabled,
+      account_status, must_change_password, (profile_photo IS NOT NULL) AS has_photo, profile_photo_updated_at, created_at, updated_at`,
+    [req.user.id, name, options.weeklyGoal, options.initialLevel, options.songGoal, options.notificationsEnabled]);
+    if (!result.rowCount) return res.status(404).json({ error: 'Usuário não encontrado.' });
+    return res.json(toUser(result.rows[0]));
+  } catch (error) { return next(error); }
 }
 
 async function uploadMyPhoto(req, res, next) {
@@ -179,7 +193,7 @@ async function uploadMyPhoto(req, res, next) {
            profile_photo_updated_at = NOW(),
            updated_at = NOW()
        WHERE id = $1
-       RETURNING id, name, email, role, weekly_goal, account_status, must_change_password,
+       RETURNING id, name, email, role, weekly_goal, initial_level, song_goal, notifications_enabled, account_status, must_change_password,
                  (profile_photo IS NOT NULL) AS has_photo, profile_photo_updated_at, created_at, updated_at`,
       [req.user.id, req.file.buffer, req.file.mimetype]
     );
@@ -225,7 +239,7 @@ async function deleteMyPhoto(req, res, next) {
 async function listManagedUsers(req, res, next) {
   try {
     const result = await pool.query(
-      `SELECT id, name, email, role, weekly_goal, account_status, must_change_password,
+      `SELECT id, name, email, role, weekly_goal, initial_level, song_goal, notifications_enabled, account_status, must_change_password,
               (profile_photo IS NOT NULL) AS has_photo,
               profile_photo_updated_at, created_at, updated_at
        FROM users
@@ -254,7 +268,7 @@ async function createManagedUser(req, res, next) {
     const result = await pool.query(
       `INSERT INTO users (id, name, email, password_hash, managed_password, role, must_change_password, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, TRUE, NOW())
-       RETURNING id, name, email, role, weekly_goal, account_status, must_change_password,
+       RETURNING id, name, email, role, weekly_goal, initial_level, song_goal, notifications_enabled, account_status, must_change_password,
                  managed_password, (profile_photo IS NOT NULL) AS has_photo,
                  profile_photo_updated_at, created_at, updated_at`,
       [crypto.randomUUID(), name, email, passwordHash, password, role]
@@ -278,7 +292,7 @@ async function updateManagedRole(req, res, next) {
       `UPDATE users
        SET role = $2, token_version = token_version + 1, updated_at = NOW()
        WHERE id = $1
-       RETURNING id, name, email, role, weekly_goal, account_status, must_change_password,
+       RETURNING id, name, email, role, weekly_goal, initial_level, song_goal, notifications_enabled, account_status, must_change_password,
                  managed_password, (profile_photo IS NOT NULL) AS has_photo,
                  profile_photo_updated_at, created_at, updated_at`,
       [req.params.id, role]
@@ -305,7 +319,7 @@ async function updateManagedStatus(req, res, next) {
            token_version = token_version + 1,
            updated_at = NOW()
        WHERE id = $1 AND role IN ('student', 'admin')
-       RETURNING id, name, email, role, weekly_goal, account_status, must_change_password,
+       RETURNING id, name, email, role, weekly_goal, initial_level, song_goal, notifications_enabled, account_status, must_change_password,
                  (profile_photo IS NOT NULL) AS has_photo, profile_photo_updated_at, created_at, updated_at`,
       [req.params.id, accountStatus]
     );

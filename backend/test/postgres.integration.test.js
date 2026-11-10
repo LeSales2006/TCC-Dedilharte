@@ -47,7 +47,9 @@ for (const legacy of [false, true]) {
         }
         await client.query(sql('schema.sql'));
         await client.query(sql('migrations/2026-09-28_phase1_functional.sql'));
+        await client.query(sql('migrations/2026-11-08_profile_passwords.sql'));
         await client.query(migration);
+        await client.query(sql('migrations/2026-11-08_profile_passwords.sql'));
         if (legacy) {
           const rows = (await client.query('SELECT id, bpm, sort_order, active, tablature FROM songs ORDER BY id')).rows;
           assert.deepEqual(rows.map(r => r.active), [false, false, true]);
@@ -56,6 +58,7 @@ for (const legacy of [false, true]) {
           assert.equal(rows[2].tablature, 'existing-tab');
           await client.query("UPDATE songs SET active = false, bpm = 96 WHERE id = 'old-published'");
           await client.query(migration);
+          await client.query(sql('migrations/2026-11-08_profile_passwords.sql'));
           const old = (await client.query("SELECT active, bpm FROM songs WHERE id = 'old-published'")).rows[0];
           assert.deepEqual(old, { active: false, bpm: 96 });
         }
@@ -101,7 +104,8 @@ for (const legacy of [false, true]) {
         assert.equal((await run(modules.listStaff)).body.items[0].items.length, 3);
         await assert.rejects(client.query(`INSERT INTO learning_module_items
           (id, module_id, item_type, song_id) VALUES ('orphan', 'module_trivia_beginner', 'song', 'missing')`), { code: '23503' });
-        await client.query(migration); // Repeated migration preserves all fixtures and progress.
+        await client.query(migration);
+        await client.query(sql('migrations/2026-11-08_profile_passwords.sql')); // Repeated migration preserves all fixtures and progress.
         assert.equal((await client.query('SELECT count(*)::int AS n FROM learning_module_items')).rows[0].n, 6);
         assert.equal((await client.query('SELECT count(*)::int AS n FROM learning_module_progress')).rows[0].n, 1);
         await client.query(sql('diagnostics/validate_content.sql'));
@@ -136,6 +140,7 @@ test('PostgreSQL: compatibility migration alone upgrades legacy auth and preserv
         VALUES ('existing-song', 'Existing song', 92, 4, 'publicada', 'preserved-tab')`);
       await client.query(sql('diagnostics/preflight_compat.sql'));
       await client.query(migration);
+        await client.query(sql('migrations/2026-11-08_profile_passwords.sql'));
       pool.query = (...args) => client.query(...args);
       process.env.JWT_SECRET = 'standalone-local-migration-test';
       const registered = await run(auth.register, { body: {
@@ -152,6 +157,7 @@ test('PostgreSQL: compatibility migration alone upgrades legacy auth and preserv
       const before = (await client.query('SELECT id, bpm, sort_order, active, tablature FROM songs')).rows;
       assert.deepEqual(before, [{ id: 'existing-song', bpm: 92, sort_order: 4, active: true, tablature: 'preserved-tab' }]);
       await client.query(migration);
+        await client.query(sql('migrations/2026-11-08_profile_passwords.sql'));
       assert.deepEqual((await client.query('SELECT id, bpm, sort_order, active, tablature FROM songs')).rows, before);
       assert.equal((await client.query("SELECT name FROM users WHERE id = 'existing'")).rows[0].name, 'Existing user');
     } finally {
@@ -206,6 +212,7 @@ test('Dashboard: persisted progress, weekly activity, idempotency and user isola
     await client.query(`SET search_path TO ${schema}`);
     await client.query(sql('schema.sql'));
     await client.query(sql('migrations/2026-09-28_phase1_functional.sql'));
+    await client.query(sql('migrations/2026-11-08_profile_passwords.sql'));
     pool.query = (...args) => client.query(...args);
     await client.query(`INSERT INTO users (id, name, weekly_goal, created_at)
       VALUES ('dash-a', 'A', 3, NOW() - INTERVAL '30 days'), ('dash-b', 'B', 5, NOW())`);

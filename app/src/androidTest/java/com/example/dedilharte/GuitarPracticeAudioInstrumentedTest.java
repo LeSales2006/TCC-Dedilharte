@@ -53,16 +53,16 @@ public class GuitarPracticeAudioInstrumentedTest extends MainActivityEncodingIns
                     GuitarSoundPlayer player = (GuitarSoundPlayer) field(activity, "guitarSoundPlayer");
                     GuitarPracticeView practice = (GuitarPracticeView) field(activity, "practiceView");
                     practice.setBpm(88);
-                    assertTrue(click(root, selected == 0 ? "INICIAR" : selected == 1 ? "PLAY" : "▶"));
+                    assertTrue(click(root, selected == 0 ? "INICIAR" : selected == 1 ? "PLAY" : "Continuar música"));
                     assertTrue(practice.isRunning());
                     assertTrue(hasVoice(player));
                     assertTrue(click(root, "SOM: LIGADO"));
                     assertFalse(hasVoice(player));
                     assertTrue(practice.isRunning());
-                    assertTrue(click(root, selected == 2 ? "⏸" : "PAUSAR"));
+                    assertTrue(click(root, selected == 2 ? "Pausar música" : "PAUSAR"));
                     assertFalse(practice.isRunning());
                     assertTrue(click(root, "SOM: DESLIGADO"));
-                    assertTrue(click(root, selected == 0 ? "CONTINUAR" : selected == 1 ? "PLAY" : "▶"));
+                    assertTrue(click(root, selected == 0 ? "CONTINUAR" : selected == 1 ? "PLAY" : "Continuar música"));
                     assertTrue(hasVoice(player));
                     assertEquals(88, practice.getBpm());
                 });
@@ -87,7 +87,7 @@ public class GuitarPracticeAudioInstrumentedTest extends MainActivityEncodingIns
         method.invoke(activity, value);
     }
     private static boolean click(View view, String label) {
-        if (view instanceof TextView && label.contentEquals(((TextView) view).getText())) return view.performClick();
+        if (view instanceof TextView && (label.contentEquals(((TextView) view).getText()) || label.contentEquals(view.getContentDescription() == null ? "" : view.getContentDescription()))) return view.performClick();
         if (view instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) view;
             for (int i = 0; i < group.getChildCount(); i++) if (click(group.getChildAt(i), label)) return true;
