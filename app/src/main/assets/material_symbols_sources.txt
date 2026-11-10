@@ -1,0 +1,9 @@
+Material Symbols Outlined — Google
+Source: https://github.com/google/material-design-icons/tree/master/symbols/android
+Files: symbols/android/{name}/materialsymbolsoutlined/{name}_24px.xml
+Downloaded: 2026-11-08
+Style: Outlined, optical size 24, weight 400, grade 0, fill 0.
+License: Apache-2.0; see material_symbols_LICENSE.txt in this directory.
+Local adaptations: default tint #1B4F4C; directional icons auto-mirror in RTL.
+Runtime tint, sizing and contrast badges are supplied by MaterialIcons.java.
+No network or icon-font dependency is required by the app.

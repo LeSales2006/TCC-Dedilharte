@@ -1,0 +1,22 @@
+<resources>
+    <color name="theme_page">#1B4946</color>
+    <color name="theme_header">#102D2B</color>
+    <color name="theme_teal">#329896</color>
+    <color name="theme_cyan">#51CDD1</color>
+    <color name="theme_pale">#8CC7D0</color>
+    <color name="theme_card">#8CC7D0</color>
+    <color name="theme_card_white">#8CC7D0</color>
+    <color name="theme_ink">#102D2B</color>
+    <color name="theme_body">#102D2B</color>
+    <color name="theme_page_text">#FFFFFF</color>
+    <color name="theme_page_body">#FFFFFF</color>
+    <color name="theme_page_accent">#51CDD1</color>
+    <color name="theme_auth_background">#1B4946</color>
+    <color name="theme_hint">#1B4946</color>
+    <color name="theme_dashboard_card">#8CC7D0</color>
+    <color name="theme_dashboard_gradient">#8CC7D0</color>
+    <color name="theme_badge">#8CC7D0</color>
+    <color name="theme_progress_track">#102D2B</color>
+    <color name="theme_diagram_pressed">#102D2B</color>
+    <color name="theme_drawer_pressed">#1B4946</color>
+</resources>

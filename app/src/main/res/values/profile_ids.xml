@@ -1,0 +1,7 @@
+<resources>
+    <item name="settingsDarkMode" type="id" />
+    <item name="preferenceLevel" type="id" />
+    <item name="preferenceWeeklyGoal" type="id" />
+    <item name="preferenceSongGoal" type="id" />
+    <item name="preferenceNotifications" type="id" />
+</resources>
