@@ -55,8 +55,8 @@ public class NightThemeInstrumentedTest extends MainActivityEncodingInstrumented
                 assertEquals(activity.getColor(R.color.theme_ink), name.getCurrentTextColor());
             });
             screenshot(context, "night-profile");
-            scenario.onActivity(activity -> PasswordDialogs.forgot(activity, DedilharteApiClient.service(), ""));
-            onView(withContentDescription("E-mail")).inRoot(isDialog()).check((view, error) -> {
+            scenario.onActivity(activity -> PasswordDialogs.change(activity, DedilharteApiClient.service(), () -> {}));
+            onView(withContentDescription("Senha atual")).inRoot(isDialog()).check((view, error) -> {
                 if (error != null) throw error;
                 assertEquals(Color.WHITE, ((TextView) view).getCurrentTextColor());
                 assertEquals(Color.rgb(27, 73, 70), ((ColorDrawable) ((android.view.View) view.getParent()).getBackground()).getColor());

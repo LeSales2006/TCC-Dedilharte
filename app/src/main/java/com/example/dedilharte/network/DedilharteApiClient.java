@@ -39,8 +39,9 @@ public final class DedilharteApiClient {
                         okhttp3.Request request = chain.request();
                         boolean publicAuth = request.url().encodedPath().equals("/api/auth/login")
                                 || request.url().encodedPath().equals("/api/auth/register")
-                                || request.url().encodedPath().equals("/api/auth/forgot-password")
-                                || request.url().encodedPath().equals("/api/auth/reset-password");
+                                || request.url().encodedPath().equals("/api/auth/password-recovery/request")
+                                || request.url().encodedPath().equals("/api/auth/password-recovery/verify")
+                                || request.url().encodedPath().equals("/api/auth/password-recovery/reset");
                         if (!publicAuth && appContext != null && request.header("Authorization") == null) {
                             String token = new SessionManager(appContext).getToken();
                             if (token != null && !token.trim().isEmpty()) {

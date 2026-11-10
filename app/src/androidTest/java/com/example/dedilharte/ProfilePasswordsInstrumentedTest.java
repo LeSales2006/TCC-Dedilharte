@@ -48,14 +48,14 @@ public class ProfilePasswordsInstrumentedTest extends MainActivityEncodingInstru
                     user.weeklyGoal = profile.weeklyGoal; user.songGoal = profile.songGoal; user.initialLevel = profile.initialLevel;
                     user.notificationsEnabled = profile.notificationsEnabled; user.updatedAtMillis = System.currentTimeMillis(); response = user; break;
                 }
-                case "forgotPassword": case "changePassword": password = (PasswordRequest) args[0]; response = null; break;
+                case "changePassword": password = (PasswordRequest) args[0]; response = null; break;
                 default: if (method.getName().equals("upsertUser")) backgroundProfileWrites++; return method.invoke(pending, args);
             }
             Object body = response; boolean failed = failProfile && method.getName().equals("updateProfile");
             return Proxy.newProxyInstance(Call.class.getClassLoader(), new Class[]{Call.class}, (call, action, params) -> {
                 if (action.getName().equals("enqueue")) { Callback<Object> callback = (Callback<Object>) params[0];
                     if (failed) callback.onFailure((Call<Object>) call, new java.io.IOException("offline fixture"));
-                    else if ((method.getName().equals("forgotPassword") || method.getName().equals("changePassword")) && passwordStatus != 200)
+                    else if (method.getName().equals("changePassword") && passwordStatus != 200)
                         callback.onResponse((Call<Object>) call, Response.error(passwordStatus, okhttp3.ResponseBody.create(okhttp3.MediaType.parse("application/json"), "{\"error\":\"Token de autenticacao ausente.\"}")));
                     else callback.onResponse((Call<Object>) call, Response.success(body)); }
                 if (action.getName().equals("isCanceled")) return false; return null;
@@ -128,22 +128,6 @@ public class ProfilePasswordsInstrumentedTest extends MainActivityEncodingInstru
                 assertEquals("Administrador", session.getName());
                 assertEquals("intermediate", session.getInitialLevel());
             });
-        }
-    }
-    @Test public void publicRecoveryErrorsNeverClaimExpiredSessionOrSuccess() {
-        session.clearSession();
-        for (int status : new int[]{401, 403, 404, 500, 503}) {
-            passwordStatus = status;
-            try (ActivityScenario<LoginActivity> scenario = ActivityScenario.launch(LoginActivity.class)) {
-                onView(withId(R.id.loginForgotPassword)).perform(scrollTo(), click());
-                onView(withHint("E-mail")).perform(replaceText("test@example.com"), closeSoftKeyboard());
-                onView(withText("Enviar link")).perform(click());
-                onView(withText("Enviar link")).check(androidx.test.espresso.assertion.ViewAssertions.matches(isEnabled()));
-                onView(withText("Sua sessão expirou. Entre novamente.")).check(androidx.test.espresso.assertion.ViewAssertions.doesNotExist());
-                onView(withText("Fechar")).check(androidx.test.espresso.assertion.ViewAssertions.doesNotExist());
-                assertFalse(session.isLoggedIn());
-                onView(withText("Cancelar")).perform(click());
-            }
         }
     }
     @Test public void settingsHasOneTitleAndLogoutClearsSession() {
@@ -238,13 +222,9 @@ public class ProfilePasswordsInstrumentedTest extends MainActivityEncodingInstru
             });
         }
     }
-    @Test public void loginRecoveryLinkAndChangePasswordDialogCallCorrectEndpoints() {
+    @Test public void changePasswordDialogCallsAuthenticatedEndpoint() {
         session.clearSession();
         try (ActivityScenario<LoginActivity> scenario = ActivityScenario.launch(LoginActivity.class)) {
-            onView(withId(R.id.loginForgotPassword)).perform(scrollTo(), click());
-            onView(withHint("E-mail")).perform(replaceText("test@example.com"), closeSoftKeyboard());
-            onView(withText("Enviar link")).perform(click()); assertEquals("test@example.com", password.email);
-            onView(withText("Fechar")).perform(click());
             scenario.onActivity(activity -> com.example.dedilharte.view.PasswordDialogs.change(activity, DedilharteApiClient.service(), () -> session.clearSession()));
             onView(withHint("Senha atual")).inRoot(isDialog()).perform(replaceText("Current123"), closeSoftKeyboard());
             onView(withHint("Nova senha")).inRoot(isDialog()).perform(replaceText("NextPassword123"), closeSoftKeyboard());

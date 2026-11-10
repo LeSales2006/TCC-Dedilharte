@@ -50,8 +50,12 @@ public interface DedilharteApiService {
 
     @POST("api/auth/login")
     Call<AuthResponse> login(@Body LoginRequest request);
-    @POST("api/auth/forgot-password")
-    Call<Void> forgotPassword(@Body com.example.dedilharte.network.model.PasswordRequest request);
+    @POST("api/auth/password-recovery/request")
+    Call<com.example.dedilharte.network.model.RecoveryResponse> requestRecoveryCode(@Body com.example.dedilharte.network.model.RecoveryRequest request);
+    @POST("api/auth/password-recovery/verify")
+    Call<com.example.dedilharte.network.model.RecoveryResponse> verifyRecoveryCode(@Body com.example.dedilharte.network.model.RecoveryRequest request);
+    @POST("api/auth/password-recovery/reset")
+    Call<com.example.dedilharte.network.model.RecoveryResponse> resetPassword(@Body com.example.dedilharte.network.model.RecoveryRequest request);
     @POST("api/auth/change-password")
     Call<Void> changePassword(@Body com.example.dedilharte.network.model.PasswordRequest request,
             @retrofit2.http.Header("Authorization") String authorization);

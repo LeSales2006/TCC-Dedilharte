@@ -11,15 +11,6 @@ DO $$ BEGIN
     ALTER TABLE users ADD CONSTRAINT users_song_goal_check CHECK (song_goal > 0);
   END IF;
 END $$;
-CREATE TABLE IF NOT EXISTS password_reset_tokens (
-  token_hash CHAR(64) PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  token_version INTEGER NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '30 minutes',
-  used_at TIMESTAMPTZ
-);
-CREATE INDEX IF NOT EXISTS password_reset_tokens_user_idx ON password_reset_tokens(user_id);
 CREATE TABLE IF NOT EXISTS auth_rate_limits (
   bucket_hash CHAR(64) PRIMARY KEY,
   attempts INTEGER NOT NULL,

@@ -6,7 +6,7 @@
 - O editor era um Dialog com 94% da largura e altura total. O ScrollView ficava dentro dessa janela, com os insets do diálogo; o botão Salvar usava um drawable sem espaço lateral.
 - O tema Material3 só definia android:colorAccent. O tema noturno substituía a base por uma definição sem paleta; o tint padrão prevalecia sobre o fundo XML do botão Entrar.
 - ApiErrors traduz qualquer 401 como sessão expirada. PasswordDialogs usava esse tratamento até para a recuperação pública.
-- Teste remoto sem credenciais e sem envio: POST /api/auth/forgot-password com {"email":"invalid"} no Render retornou 401 {"error":"Token de autenticacao ausente."}. As rotas locais de recuperação são públicas. A resposta remota é compatível com rota ainda ausente no deploy e queda no router /api, protegido globalmente por JWT; não houve acesso aos logs internos do Render.
+- A investigação anterior encontrou recuperação ausente no deploy, caindo no middleware JWT. O contrato público atual está em backend/PROFILE_PASSWORDS.md; depende de publicação autorizada posterior.
 - O controlador local respondia 202 ANTES de consultar o banco/enviar e-mail e apenas registrava falhas posteriores no console.
 
 ## Correções desta execução
@@ -18,9 +18,9 @@
 - Insets: a nova tela usa o tratamento já existente da Activity para barras, recorte e teclado, sem uma segunda janela. Fundo das barras acompanha o cabeçalho. Nenhuma barra é escondida pelo app.
 - Recuperação: 401/403/404 públicos são apresentados como indisponibilidade do servidor, sem mensagem de sessão expirada e sem logout. Erros não mostram confirmação de envio.
 - Backend: 202 somente depois de banco e Resend aceitarem a operação; exige ID de envio do provedor. Configuração, banco, HTTP inválido ou falha do provedor resultam em 503 genérico e remoção do token dessa tentativa.
-- Privacidade: a mesma chamada ao provedor é feita para e-mails existentes e ausentes. Os ausentes recebem aviso neutro SEM link/token, evitando diferenças públicas de status/tempo ligadas à existência da conta. Rate limiting existente preservado.
+- Recuperação por código e regras de privacidade atuais: backend/PROFILE_PASSWORDS.md.
 - Rotas desconhecidas em /api/auth terminam com 404 e não caem no JWT de /api.
-- Segurança existente preservada: token aleatório de 256 bits, hash SHA-256 no banco, prazo de 30 minutos, uso único transacional, senha atual exigida na troca, bcrypt e revogação das sessões após troca/reset.
+- Segurança da recuperação atual: código com HMAC, 10 minutos, limites persistidos, autorização temporária e revogação de sessões; ver backend/PROFILE_PASSWORDS.md.
 - O perfil usa o ID do JWT e uma lista explícita de campos editáveis. Nome, nível e role enviado pelo cliente não promovem o usuário. O teste agora usa nome Administrador e role admin para comprovar isso.
 - Nenhum endpoint, coluna ou migration nova foi criado nesta execução. As alterações anteriores do workspace foram preservadas; activityController.js não precisou ser modificado.
 
@@ -61,8 +61,8 @@ Backend/documentação:
 ## Pendências externas
 
 - A API publicada ainda precisa receber o backend atualizado e as migrations já existentes de perfil/senha, caso ainda não tenham sido aplicadas. Nenhuma migration/implantação foi executada em produção.
-- Não há backend/.env nem credenciais de e-mail configuradas neste workspace. Falta ambiente de homologação e destinatário autorizado para comprovar entrega real e uso do link recebido. Não foi enviado e-mail real; aceitação pelo Resend também não garante chegada à caixa de entrada.
-- Configuração necessária já documentada em backend/PROFILE_PASSWORDS.md: DATABASE_URL, JWT_SECRET, RESEND_API_KEY, MAIL_FROM verificado, PASSWORD_RESET_BASE_URL HTTPS e TRUST_PROXY_HOPS conforme infraestrutura.
+- Não há backend/.env nem credenciais de e-mail configuradas neste workspace. Falta ambiente de homologação e destinatário autorizado para comprovar entrega real e uso do código recebido. Não foi enviado e-mail real; aceitação pelo Resend também não garante chegada à caixa de entrada.
+- Configuração necessária já documentada em backend/PROFILE_PASSWORDS.md: DATABASE_URL, JWT_SECRET, RESEND_API_KEY, MAIL_FROM verificado, PASSWORD_RECOVERY_SECRET e TRUST_PROXY_HOPS conforme infraestrutura.
 - Nenhum commit/push, alteração de dados de produção ou instalação sobre o aplicativo pessoal.
 
 ## Resultado final

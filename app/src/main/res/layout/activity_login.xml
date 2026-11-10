@@ -105,7 +105,7 @@
             android:textSize="17sp"
             android:textStyle="bold" />
 
-        <TextView android:id="@+id/loginForgotPassword" android:layout_width="match_parent" android:layout_height="48dp" android:gravity="center" android:text="Esqueci minha senha?" android:textColor="#FFFFFF" android:textSize="16sp" android:clickable="true" android:focusable="true" />
+        <TextView android:id="@+id/loginForgotPassword" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="48dp" android:gravity="center" android:text="Esqueceu a senha?" android:textColor="#FFFFFF" android:textSize="16sp" android:clickable="true" android:focusable="true" />
         <ProgressBar
             android:id="@+id/loginProgress"
             style="?android:attr/progressBarStyle"

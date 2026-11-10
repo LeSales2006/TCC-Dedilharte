@@ -383,10 +383,8 @@ Alterações anteriores de telas, áudio e outros recursos foram preservadas.
 - Dashboard: músicas aprendidas/meta pessoal, percentual real limitado a 100%
   e animação de 600 ms. Trivias e seus IDs permanecem independentes; nível
   calculado e nível inicial declarado aparecem separadamente.
-- Recuperação com e-mail por Resend, link HTTPS, token aleatório de 256 bits,
-  somente hash SHA-256 persistido, expiração de 30 minutos e uso único em
-  transação. Resposta pública idêntica para e-mails existentes e ausentes.
-  Troca exige senha atual, bcrypt custo 12 e invalida sessões/links anteriores.
+- Recuperação atual com código de 6 dígitos via Resend, HMAC no banco, 10 minutos e autorização temporária de uso único. Troca autenticada preservada. Ver backend/PROFILE_PASSWORDS.md.
+
 - Migration aditiva, repetível, sem remoção de usuários, aulas ou progresso.
   Rate limiting persistido no PostgreSQL. Nenhuma migration de produção executada.
 - Insets comuns nas Activities e nos formulários/modais, incluindo teclado;
@@ -409,7 +407,7 @@ Arquivos desta etapa (além dos ícones já descritos na etapa anterior):
   `backend/migrations/2026-11-08_profile_passwords.sql`,
   `backend/src/controllers/{authController,usersController,passwordController}.js`,
   `backend/src/routes/{auth,users}.js`, `backend/src/server.js`,
-  `backend/src/profilePreferences.js`, `backend/src/resetPasswordPage.js`,
+  `backend/src/profilePreferences.js`,
   `backend/src/middleware/rateLimit.js`, `backend/src/services/resetEmail.js`.
 - Testes: `backend/test/{postgres.integration,profilePasswords.integration}.test.js`;
   `app/src/androidTest/java/com/example/dedilharte/{AuthenticationFlowInstrumentedTest,ExampleInstrumentedTest,DashboardInstrumentedTest,ProfilePasswordsInstrumentedTest}.java`;
@@ -458,7 +456,7 @@ Configuração e homologação pendentes:
   antes de distribuir o APK. A API atualmente implantada não recebe as mudanças
   por este trabalho local.
 - Configurar `RESEND_API_KEY`, `MAIL_FROM` de domínio verificado,
-  `PASSWORD_RESET_BASE_URL` HTTPS apontando para `/api/auth/reset-password`,
+  `PASSWORD_RECOVERY_SECRET` aleatório com ao menos 32 bytes,
   `TRUST_PROXY_HOPS` conforme topologia, além de `DATABASE_URL` e `JWT_SECRET`.
   Usar Node.js 20+. Instruções e contratos em `backend/PROFILE_PASSWORDS.md`.
 - Homologar entrega real de e-mail e fluxo com o Render/Aiven atualizado.

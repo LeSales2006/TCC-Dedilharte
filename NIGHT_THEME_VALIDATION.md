@@ -7,7 +7,7 @@ A preferência já era gravada e o AppCompat já recriava a Activity. O problema
 - `assembleDebug`, `assembleDebugAndroidTest`, `testDebugUnitTest` e `lintDebug`: BUILD SUCCESSFUL, JDK 21, execução offline.
 - 32 testes unitários aprovados; lint sem erros, com 182 avisos.
 - Teste instrumentado `NightThemeInstrumentedTest#modeSwitchUpdatesScreensAndPersists`: aprovado no emulador API 36.1, usando sessão/API simuladas e pacote isolado.
-- Verificados: switch real, aplicação imediata, configurações, músicas, arpejos, sobre, perfil, menu, diálogo de recuperação, login, cadastro, reabertura com preferência salva e retorno às cores originais do tema claro.
+- Verificados: switch real, aplicação imediata, configurações, músicas, arpejos, sobre, perfil, menu, diálogo de troca de senha, login, cadastro, reabertura com preferência salva e retorno às cores originais do tema claro.
 - Encerramento do processo por `am force-stop` e inicialização fria do login: preferência noturna mantida; conferência visual das capturas em `build/night-*.png`.
 - `git diff --check`: aprovado. Compatibilidade de compilação mantida com o mínimo Android existente; não houve execução em dispositivo Android 7.
 - Os primeiros testes foram interrompidos por ANRs do Launcher/System UI do emulador; após fechar esses alertas e ajustar a seleção da janela do menu no teste, a execução completa passou.

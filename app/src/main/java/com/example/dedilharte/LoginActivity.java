@@ -55,9 +55,12 @@ public final class LoginActivity extends AppCompatActivity {
         api = DedilharteApiClient.service();
         setContentView(R.layout.activity_login);
         com.example.dedilharte.view.WindowInsetsHelper.activity(this);
-        findViewById(R.id.loginForgotPassword).setOnClickListener(v -> com.example.dedilharte.view.PasswordDialogs.forgot(this, api, emailInput.getText().toString()));
+        findViewById(R.id.loginForgotPassword).setOnClickListener(v -> startActivity(
+                new Intent(this, PasswordRecoveryActivity.class).putExtra("email", emailInput.getText().toString())));
 
         emailInput = findViewById(R.id.loginEmail);
+        String recoveredEmail = getIntent().getStringExtra("recoveryEmail");
+        if (recoveredEmail != null) emailInput.setText(recoveredEmail);
         passwordInput = findViewById(R.id.loginPassword);
         loginButton = findViewById(R.id.loginButton);
         progressBar = findViewById(R.id.loginProgress);
@@ -120,6 +123,7 @@ public final class LoginActivity extends AppCompatActivity {
         String password = passwordInput.getText().toString();
 
         if (!validate(email, password)) {
+            highlightRecovery();
             return;
         }
 
@@ -170,6 +174,7 @@ public final class LoginActivity extends AppCompatActivity {
     }
 
     private void showConnectionError(Throwable error) {
+        highlightRecovery();
         String message = error instanceof javax.net.ssl.SSLException
                 ? "Não foi possível validar a conexão segura. Verifique a rede e a data do aparelho."
                 : "Sem conexão com o servidor. Tente novamente.";
@@ -193,6 +198,7 @@ public final class LoginActivity extends AppCompatActivity {
     }
 
     private void showError(Response<AuthResponse> response) {
+        highlightRecovery();
         String message;
         if (response.code() == 401) {
             message = "E-mail ou senha inválidos.";
@@ -216,6 +222,13 @@ public final class LoginActivity extends AppCompatActivity {
         } catch (Exception ignored) {
             return fallback;
         }
+    }
+
+    private void highlightRecovery() {
+        TextView recovery = findViewById(R.id.loginForgotPassword);
+        recovery.setTextColor(0xff54d6dd);
+        recovery.setTypeface(recovery.getTypeface(), android.graphics.Typeface.BOLD);
+        recovery.setText("Esqueceu a senha? Recupere por e-mail");
     }
 
     private void openMain() {
