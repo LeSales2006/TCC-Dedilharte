@@ -17,7 +17,7 @@
 - Login/cadastro: contraste maior com fundo verde-escuro, campos claros e ação ciano com texto verde-escuro. Temas diurno/noturno definem a paleta Material; diálogo de senha recebe tema explícito.
 - Insets: a nova tela usa o tratamento já existente da Activity para barras, recorte e teclado, sem uma segunda janela. Fundo das barras acompanha o cabeçalho. Nenhuma barra é escondida pelo app.
 - Recuperação: 401/403/404 públicos são apresentados como indisponibilidade do servidor, sem mensagem de sessão expirada e sem logout. Erros não mostram confirmação de envio.
-- Backend: 202 somente depois de banco e Resend aceitarem a operação; exige ID de envio do provedor. Configuração, banco, HTTP inválido ou falha do provedor resultam em 503 genérico e remoção do token dessa tentativa.
+- Backend: 202 somente depois de banco e Brevo aceitarem a operação; exige ID de envio do provedor. Configuração, banco, HTTP inválido ou falha do provedor resultam em 503 genérico e remoção do token dessa tentativa.
 - Recuperação por código e regras de privacidade atuais: backend/PROFILE_PASSWORDS.md.
 - Rotas desconhecidas em /api/auth terminam com 404 e não caem no JWT de /api.
 - Segurança da recuperação atual: código com HMAC, 10 minutos, limites persistidos, autorização temporária e revogação de sessões; ver backend/PROFILE_PASSWORDS.md.
@@ -53,7 +53,7 @@ Backend/documentação:
 ## Validação
 
 - PostgreSQL 18 local em cluster de testes separado; node --test: **45 aprovados, zero falhas/pulos**. Inclui cadastro, login, perfil/persistência/isolamento de papel, respostas públicas, ausência de JWT, rota desconhecida, banco indisponível, espera pela aceitação do provedor, falha de envio, hash/expiração/token adulterado/reutilização/concorrência, troca de senha, revogação e rate limiting.
-- Evidência backend: build/ui-auth-backend-final.log. Provedor simulado; o adaptador de produção continua usando a API real Resend.
+- Evidência backend: build/ui-auth-backend-final.log. Provedor simulado; o adaptador de produção continua usando a API real do Brevo.
 - Android: testes de cadastro, entrada por papel, falha de gravação sem perda do estado confirmado, rascunho/recriação, recuperação pública com erros 401/403/404/500/503, troca autenticada, persistência e logout. API simulada e pacote com applicationId separado no AVD RepairApi36/API 36.1.
 - A primeira tentativa instrumentada foi interrompida por ANR do System UI do emulador. A segunda passou 32/33; o teste restante exigia barra de navegação, ausente na configuração de teclas físicas do AVD. Logs intermediários preservados em build/ui-auth-instrumented.log e build/ui-auth-instrumented-retest.log.
 - Build com JDK padrão 25 falhou por incompatibilidade com Gradle. A execução com JDK 21 passou. Android 7 permanece como minSdk 24; não há imagem API 24 instalada para teste real dessa versão.
@@ -61,8 +61,8 @@ Backend/documentação:
 ## Pendências externas
 
 - A API publicada ainda precisa receber o backend atualizado e as migrations já existentes de perfil/senha, caso ainda não tenham sido aplicadas. Nenhuma migration/implantação foi executada em produção.
-- Não há backend/.env nem credenciais de e-mail configuradas neste workspace. Falta ambiente de homologação e destinatário autorizado para comprovar entrega real e uso do código recebido. Não foi enviado e-mail real; aceitação pelo Resend também não garante chegada à caixa de entrada.
-- Configuração necessária já documentada em backend/PROFILE_PASSWORDS.md: DATABASE_URL, JWT_SECRET, RESEND_API_KEY, MAIL_FROM verificado, PASSWORD_RECOVERY_SECRET e TRUST_PROXY_HOPS conforme infraestrutura.
+- Não há backend/.env nem credenciais de e-mail configuradas neste workspace. Falta ambiente de homologação e destinatário autorizado para comprovar entrega real e uso do código recebido. Não foi enviado e-mail real; aceitação pelo Brevo também não garante chegada à caixa de entrada.
+- Configuração necessária já documentada em backend/PROFILE_PASSWORDS.md: DATABASE_URL, JWT_SECRET, BREVO_API_KEY, MAIL_FROM verificado no Brevo, PASSWORD_RECOVERY_SECRET e TRUST_PROXY_HOPS conforme infraestrutura.
 - Nenhum commit/push, alteração de dados de produção ou instalação sobre o aplicativo pessoal.
 
 ## Resultado final

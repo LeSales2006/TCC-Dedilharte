@@ -32,11 +32,11 @@
 
 - `backend/src/resetPasswordPage.js`
 
-O controlador, as rotas, o adaptador Resend, a migration anterior e os testes/documentos foram atualizados para eliminar o fluxo anterior. JWT, controles compartilhados, perfil e troca autenticada foram preservados.
+O controlador, as rotas, o adaptador Brevo (API v3), a migration anterior e os testes/documentos foram atualizados para eliminar o fluxo anterior. JWT, controles compartilhados, perfil e troca autenticada foram preservados.
 
 ## Resultados
 
-- Backend: 49 testes aprovados, sem falhas ou skips; PostgreSQL local, schemas isolados e envio Resend simulado. Código correto/incorreto/expirado, 5 tentativas, reenvio, cooldown e limites por IP/e-mail, privacidade de contas ausentes/bloqueadas, uso único concorrente, autorização vinculada/expirada, bcrypt, sessões revogadas, login e regressões de perfil/músicas/progresso.
+- Backend: 49 testes aprovados, sem falhas ou skips; PostgreSQL local, schemas isolados e envio simulado do provedor de e-mail. Código correto/incorreto/expirado, 5 tentativas, reenvio, cooldown e limites por IP/e-mail, privacidade de contas ausentes/bloqueadas, uso único concorrente, autorização vinculada/expirada, bcrypt, sessões revogadas, login e regressões de perfil/músicas/progresso.
 - Migration executada duas vezes apenas no schema local de teste; usuários, hashes, conteúdo e progresso preservados.
 - Android: 32 testes unitários e 17 instrumentados aprovados no emulador API 36.1 (6 do novo fluxo, 10 regressões, 1 tema). Colagem com zero inicial, rotação com autorização em memória, validação/confirmar senha, falhas HTTP/rede, bloqueios de reenvio, retorno ao login, temas, perfil, troca autenticada e logout.
 - As primeiras execuções foram afetadas por ANR do System UI e timeout do callback legado de fechamento do teclado no emulador. O teste passou a usar insets para fechar/verificar o teclado; todas as execuções finais passaram.
@@ -47,12 +47,18 @@ O controlador, as rotas, o adaptador Resend, a migration anterior e os testes/do
 
 [Migration aditiva e idempotente](backend/migrations/2026-11-10_password_recovery_codes.sql): adiciona initial_level, song_goal e notifications_enabled quando ausentes; cria password_recovery_requests e auth_rate_limits. Não executada em produção.
 
-## Render/Resend pendentes
+## Render/Brevo pendentes
 
-- Configurar `RESEND_API_KEY` e `MAIL_FROM` de [domínio verificado no Resend](https://resend.com/docs/dashboard/domains/introduction).
+- Configurar `BREVO_API_KEY` e `MAIL_FROM` de remetente verificado no Brevo. O adaptador usa `POST https://api.brevo.com/v3/smtp/email` com o header `api-key`; `MAIL_FROM` aceita endereço simples ou `Nome <endereço>`. Referência: [API v3 de e-mail transacional](https://developers.brevo.com/reference/send-transac-email).
 - Configurar `PASSWORD_RECOVERY_SECRET`: segredo aleatório de pelo menos 32 bytes, distinto do JWT_SECRET, estável e igual em todas as instâncias. Exemplo de geração local: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
 - Manter `DATABASE_URL` e `JWT_SECRET`; conferir `TRUST_PROXY_HOPS` conforme os proxies confiáveis do Render e Node.js 20+.
 - Aplicação da migration e publicação da API ficam para procedimento posterior autorizado, antes de distribuir o APK. Homologar entrega real/caixa de entrada/spam com domínio e destinatário autorizados; nenhum e-mail real foi enviado nestes testes.
 
 Nenhuma migration de produção, commit, push ou deploy foi executado.
+
+## Migração do envio para Brevo (revisão atual)
+
+- `backend/src/services/resetEmail.js` passou a usar exclusivamente `POST https://api.brevo.com/v3/smtp/email`, com o header `api-key` e `BREVO_API_KEY`/`MAIL_FROM` do ambiente. `MAIL_FROM` aceita endereço simples ou `Nome <endereço>`; erros do provedor continuam genéricos e não expõem chave nem código.
+- `backend/test/profilePasswords.integration.test.js` e os documentos de configuração foram atualizados; referências ao Resend foram removidas.
+- Execução local desta revisão: `node --test` com **32 testes aprovados, 6 integrações puladas por ausência de `TEST_DATABASE_URL`, 0 falhas**. Nenhum banco foi alterado e nenhum e-mail real foi enviado. O teste de integração existente continua cobrindo a migration `2026-11-10_password_recovery_codes.sql` quando executado em PostgreSQL local isolado.
 

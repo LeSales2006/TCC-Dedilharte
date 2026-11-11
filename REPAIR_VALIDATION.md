@@ -383,7 +383,7 @@ Alterações anteriores de telas, áudio e outros recursos foram preservadas.
 - Dashboard: músicas aprendidas/meta pessoal, percentual real limitado a 100%
   e animação de 600 ms. Trivias e seus IDs permanecem independentes; nível
   calculado e nível inicial declarado aparecem separadamente.
-- Recuperação atual com código de 6 dígitos via Resend, HMAC no banco, 10 minutos e autorização temporária de uso único. Troca autenticada preservada. Ver backend/PROFILE_PASSWORDS.md.
+- Recuperação atual com código de 6 dígitos via Brevo (API v3), HMAC no banco, 10 minutos e autorização temporária de uso único. Troca autenticada preservada. Ver backend/PROFILE_PASSWORDS.md.
 
 - Migration aditiva, repetível, sem remoção de usuários, aulas ou progresso.
   Rate limiting persistido no PostgreSQL. Nenhuma migration de produção executada.
@@ -455,7 +455,7 @@ Configuração e homologação pendentes:
 - Aplicar migration revisada e publicar backend por procedimento autorizado,
   antes de distribuir o APK. A API atualmente implantada não recebe as mudanças
   por este trabalho local.
-- Configurar `RESEND_API_KEY`, `MAIL_FROM` de domínio verificado,
+- Configurar `BREVO_API_KEY`, `MAIL_FROM` de remetente verificado no Brevo,
   `PASSWORD_RECOVERY_SECRET` aleatório com ao menos 32 bytes,
   `TRUST_PROXY_HOPS` conforme topologia, além de `DATABASE_URL` e `JWT_SECRET`.
   Usar Node.js 20+. Instruções e contratos em `backend/PROFILE_PASSWORDS.md`.

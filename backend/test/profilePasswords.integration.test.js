@@ -37,7 +37,7 @@ test('PostgreSQL + HTTP: additive migration, profile, recovery codes and passwor
     pool.query = (...args) => isolated.query(...args); pool.connect = () => isolated.connect();
     process.env.JWT_SECRET = 'isolated-password-tests-only';
     process.env.PASSWORD_RECOVERY_SECRET = 'isolated-recovery-hmac-secret-at-least-32-bytes';
-    process.env.RESEND_API_KEY = 'fake-key-never-sent'; process.env.MAIL_FROM = 'test@example.com';
+    process.env.BREVO_API_KEY = 'fake-key-never-sent'; process.env.MAIL_FROM = 'test@example.com';
     const deliveries = [];
     const deliver = async (address, code, requestId) => deliveries.push({ address, code, requestId });
     email.send = deliver;
@@ -189,11 +189,17 @@ test('PostgreSQL + HTTP: additive migration, profile, recovery codes and passwor
       const connect = pool.connect;
       pool.connect = async () => { throw new Error('test database failure'); };
       try { assert.equal((await issue(user.email)).status, 503); } finally { pool.connect = connect; }
-      for (const key of ['RESEND_API_KEY', 'PASSWORD_RECOVERY_SECRET']) {
+      for (const key of ['BREVO_API_KEY', 'MAIL_FROM', 'PASSWORD_RECOVERY_SECRET']) {
         const value = process.env[key]; delete process.env[key];
         for (const address of [user.email, 'absent@example.com']) assert.equal((await issue(address)).status, 503);
         process.env[key] = value;
       }
+      // PASSWORD_RECOVERY_SECRET must be at least 32 bytes; a short secret must fail closed like a missing one.
+      const strongSecret = process.env.PASSWORD_RECOVERY_SECRET;
+      process.env.PASSWORD_RECOVERY_SECRET = 'too-short-to-be-safe';
+      try {
+        for (const address of [user.email, 'absent@example.com']) assert.equal((await issue(address)).status, 503);
+      } finally { process.env.PASSWORD_RECOVERY_SECRET = strongSecret; }
     });
     await t.test('success waits for provider acceptance and committed storage', async () => {
       let release, entered;
@@ -210,19 +216,36 @@ test('PostgreSQL + HTTP: additive migration, profile, recovery codes and passwor
   }
 });
 
-test('Resend sends only the six-digit code, uses idempotency and requires provider acceptance', async () => {
-  process.env.RESEND_API_KEY = 'fake-test-only'; process.env.MAIL_FROM = 'test@example.com';
+test('Brevo v3 sends only the six-digit code and requires provider acceptance', async () => {
   const originalFetch = global.fetch;
+  const originalEnv = { key: process.env.BREVO_API_KEY, from: process.env.MAIL_FROM };
+  process.env.BREVO_API_KEY = 'fake-test-only'; process.env.MAIL_FROM = 'Dedilharte <no-reply@example.com>';
   try {
     let captured;
-    global.fetch = async (url, options) => { captured = { url, options }; return { ok: true, json: async () => ({ id: 'delivery-fixture' }) }; };
+    global.fetch = async (url, options) => { captured = { url, options }; return { ok: true, json: async () => ({ messageId: '<delivery-fixture@relay.example>' }) }; };
     await email.send('recipient@example.com', '000012', 'request-fixture');
-    assert.equal(captured.url, 'https://api.resend.com/emails'); assert.equal(captured.options.headers.Authorization, 'Bearer fake-test-only');
-    assert.equal(captured.options.headers['Idempotency-Key'], 'recovery/request-fixture');
-    const message = JSON.parse(captured.options.body); assert.match(message.text, /000012/); assert.match(message.text, /10 minutos/);
-    assert.doesNotMatch(message.text, /https?:|token=|<html/i); assert.deepEqual(message.to, ['recipient@example.com']);
+    assert.equal(captured.url, 'https://api.brevo.com/v3/smtp/email'); assert.equal(captured.options.method, 'POST');
+    assert.equal(captured.options.headers['api-key'], 'fake-test-only'); assert.equal(captured.options.headers.Authorization, undefined);
+    assert.equal(captured.options.headers['Content-Type'], 'application/json');
+    const message = JSON.parse(captured.options.body);
+    assert.deepEqual(message.sender, { name: 'Dedilharte', email: 'no-reply@example.com' });
+    assert.deepEqual(message.to, [{ email: 'recipient@example.com' }]);
+    assert.match(message.textContent, /000012/); assert.match(message.textContent, /10 minutos/);
+    assert.doesNotMatch(message.textContent, /https?:|token=|<html/i);
+    // MAIL_FROM also accepts a bare address and falls back to the default display name.
+    process.env.MAIL_FROM = 'no-reply@example.com';
+    await email.send('recipient@example.com', '123456', 'id');
+    assert.deepEqual(JSON.parse(captured.options.body).sender, { name: 'Dedilharte', email: 'no-reply@example.com' });
     global.fetch = async () => ({ ok: true, json: async () => ({}) }); await assert.rejects(email.send('recipient@example.com', '123456', 'id'), /RESET_EMAIL_SEND_FAILED/);
-    global.fetch = async () => ({ ok: false }); await assert.rejects(email.send('recipient@example.com', '123456', 'id'), /RESET_EMAIL_SEND_FAILED/);
-    delete process.env.RESEND_API_KEY; assert.throws(email.configuration);
-  } finally { global.fetch = originalFetch; }
+    global.fetch = async () => ({ ok: true, json: async () => ({ messageId: '   ' }) }); await assert.rejects(email.send('recipient@example.com', '123456', 'id'), /RESET_EMAIL_SEND_FAILED/);
+    global.fetch = async () => ({ ok: false, json: async () => ({ code: 'unauthorized', message: 'leaky provider detail' }) }); await assert.rejects(email.send('recipient@example.com', '123456', 'id'), /RESET_EMAIL_SEND_FAILED/);
+    process.env.MAIL_FROM = 'Dedilharte <no-reply@example.com>';
+    await assert.rejects(email.send('recipient@example.com', '12345', 'id'), /INVALID_RECOVERY_CODE/);
+    delete process.env.BREVO_API_KEY; assert.throws(email.configuration, /RESET_EMAIL_NOT_CONFIGURED/);
+    process.env.BREVO_API_KEY = 'fake-test-only'; process.env.MAIL_FROM = 'not-an-email'; assert.throws(email.configuration, /RESET_EMAIL_NOT_CONFIGURED/);
+  } finally {
+    global.fetch = originalFetch;
+    if (originalEnv.key === undefined) delete process.env.BREVO_API_KEY; else process.env.BREVO_API_KEY = originalEnv.key;
+    if (originalEnv.from === undefined) delete process.env.MAIL_FROM; else process.env.MAIL_FROM = originalEnv.from;
+  }
 });
