@@ -6,6 +6,7 @@ public final class UserRequest {
     public final int weeklyGoal;
     public final long updatedAtMillis;
     // Nullable for legacy sync requests: omitted fields never reset personalized preferences.
+    public String email;
     public String initialLevel;
     public Integer songGoal;
     public Boolean notificationsEnabled;

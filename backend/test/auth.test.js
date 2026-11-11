@@ -7,6 +7,8 @@ process.env.JWT_SECRET = 'test-secret-only-for-unit-tests';
 
 const pool = require('../src/db');
 const authController = require('../src/controllers/authController');
+const { VERSION } = require('../src/terms');
+const acceptance = { termsAccepted: true, termsVersion: VERSION };
 const { authenticateToken } = require('../src/middleware/authMiddleware');
 
 function response() {
@@ -50,7 +52,7 @@ test('REGISTER valido retorna 201, token e user sem password_hash', async () => 
   };
 
   const res = await run(authController.register, {
-    body: { name: 'Leticia', email: 'TESTE@DEDILHARTE.COM', password: 'Teste123' },
+    body: { name: 'Leticia', email: 'TESTE@DEDILHARTE.COM', password: 'Teste123', ...acceptance },
   });
 
   assert.equal(res.statusCode, 201);
@@ -65,7 +67,7 @@ test('REGISTER email duplicado retorna 409', async () => {
   pool.query = async () => ({ rowCount: 1, rows: [{ id: 'existing' }] });
 
   const res = await run(authController.register, {
-    body: { name: 'Leticia', email: 'teste@dedilharte.com', password: 'Teste123' },
+    body: { name: 'Leticia', email: 'teste@dedilharte.com', password: 'Teste123', ...acceptance },
   });
 
   assert.equal(res.statusCode, 409);
@@ -190,6 +192,19 @@ test('missing login body returns 400 and concurrent duplicate registration retur
     if (sql.startsWith('SELECT')) return { rowCount: 0, rows: [] };
     throw Object.assign(new Error('duplicate'), { code: '23505' });
   };
-  const res = await run(authController.register, { body: { name: 'Test', email: 'test@example.com', password: 'Teste123' } });
+  const res = await run(authController.register, { body: { name: 'Test', email: 'test@example.com', password: 'Teste123', ...acceptance } });
   assert.equal(res.statusCode, 409);
+});
+
+test('REGISTER rejects missing, false, coerced or outdated acceptance and non-student roles before queries', async () => {
+  pool.query = async () => { throw new Error('Rejected registration must not touch users'); };
+  for (const fields of [{}, { termsAccepted: false, termsVersion: VERSION },
+    { termsAccepted: 'true', termsVersion: VERSION }, { termsAccepted: 1, termsVersion: VERSION },
+    { termsAccepted: true }, { termsAccepted: true, termsVersion: 'old' },
+    ...['admin', 'configurator', 'STUDENT', '', null].map(role => ({ ...acceptance, role }))]) {
+    const res = await run(authController.register, { body: {
+      name: 'Aluno', email: 'student@example.com', password: 'Password123', ...fields,
+    } });
+    assert.equal(res.statusCode, 400, JSON.stringify(fields));
+  }
 });

@@ -140,11 +140,14 @@ test('PostgreSQL: compatibility migration alone upgrades legacy auth and preserv
         VALUES ('existing-song', 'Existing song', 92, 4, 'publicada', 'preserved-tab')`);
       await client.query(sql('diagnostics/preflight_compat.sql'));
       await client.query(migration);
+      await client.query(sql('migrations/2026-11-11_configurator_account_protection.sql'));
         await client.query(sql('migrations/2026-11-08_profile_passwords.sql'));
       pool.query = (...args) => client.query(...args);
       process.env.JWT_SECRET = 'standalone-local-migration-test';
+      await client.query(sql('migrations/2026-11-11_student_terms.sql'));
       const registered = await run(auth.register, { body: {
         name: 'Migration Test', email: 'new@example.com', password: 'Local1234',
+        termsAccepted: true, termsVersion: require('../src/terms').VERSION,
       } });
       assert.equal(registered.statusCode, 201);
       const logged = await run(auth.login, { body: { email: 'NEW@example.com', password: 'Local1234' } });
@@ -153,10 +156,14 @@ test('PostgreSQL: compatibility migration alone upgrades legacy auth and preserv
       // Registration's existence check alone cannot prevent concurrent duplicate accounts.
       await assert.rejects(client.query(`INSERT INTO users (id, name, email)
         VALUES ('duplicate', 'Duplicate', 'NEW@example.com')`), { code: '23505' });
-      assert.equal((await client.query("SELECT managed_password FROM users WHERE id = 'existing'")).rows[0].managed_password, null);
+      assert.equal((await client.query(`SELECT count(*)::int AS n FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'users' AND column_name = 'managed_password'`)).rows[0].n, 0);
+      assert.equal((await client.query(`SELECT count(*)::int AS n FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'users' AND column_name = 'password_hash'`)).rows[0].n, 1);
       const before = (await client.query('SELECT id, bpm, sort_order, active, tablature FROM songs')).rows;
       assert.deepEqual(before, [{ id: 'existing-song', bpm: 92, sort_order: 4, active: true, tablature: 'preserved-tab' }]);
       await client.query(migration);
+      await client.query(sql('migrations/2026-11-11_configurator_account_protection.sql'));
         await client.query(sql('migrations/2026-11-08_profile_passwords.sql'));
       assert.deepEqual((await client.query('SELECT id, bpm, sort_order, active, tablature FROM songs')).rows, before);
       assert.equal((await client.query("SELECT name FROM users WHERE id = 'existing'")).rows[0].name, 'Existing user');

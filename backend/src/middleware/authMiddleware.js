@@ -63,11 +63,19 @@ function requireSelfOrAdmin(paramName) {
     if (!req.user || !req.user.id) {
       return res.status(401).json({ error: 'Token de autenticacao ausente.' });
     }
-    if (req.user.role === 'admin' || req.user.role === 'configurator' || req.user.id === requestedUserId) {
+    if (req.user.role === 'admin' || req.user.id === requestedUserId) {
       return next();
     }
     return res.status(403).json({ error: 'Acesso negado.' });
   };
+}
+
+// Configurators only manage accounts and their own settings; student content is off limits.
+function requireStudentOrAdmin(req, res, next) {
+  if (!req.user || !['student', 'admin'].includes(req.user.role)) {
+    return res.status(403).json({ error: 'Acesso restrito a alunos e administradores.' });
+  }
+  return next();
 }
 
 function requireAdmin(req, res, next) {
@@ -97,4 +105,5 @@ module.exports = {
   requireAdmin,
   requireStaff,
   requireConfigurator,
+  requireStudentOrAdmin,
 };

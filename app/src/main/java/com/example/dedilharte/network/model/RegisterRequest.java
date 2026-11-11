@@ -7,6 +7,9 @@ public final class RegisterRequest {
     public String initialLevel = "beginner";
     public int weeklyGoal = 3, songGoal = 10;
     public boolean notificationsEnabled;
+    public final String role = "student";
+    public boolean termsAccepted;
+    public String termsVersion;
 
     public RegisterRequest(String name, String email, String password) {
         this.name = name;

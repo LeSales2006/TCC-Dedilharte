@@ -31,6 +31,14 @@
             android:singleLine="true" android:maxLength="180" android:textColor="@color/theme_header"
             android:textColorHint="@color/theme_hint" android:textSize="17sp" />
 
+        <TextView style="@style/ProfileLabel" android:labelFor="@id/editEmail" android:text="E-mail" />
+        <EditText android:id="@+id/editEmail"
+            android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="56dp"
+            android:layout_marginBottom="24dp" android:background="@drawable/bg_profile_field"
+            android:padding="16dp" android:hint="seu@email.com" android:inputType="textEmailAddress"
+            android:singleLine="true" android:maxLength="254" android:textColor="@color/theme_header"
+            android:textColorHint="@color/theme_hint" android:textSize="17sp" />
+
         <TextView android:id="@+id/editGoalLabel" style="@style/ProfileLabel" android:text="Meta semanal" />
         <LinearLayout android:id="@+id/editGoalRow"
             android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp"

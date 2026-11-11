@@ -4,8 +4,6 @@ public final class UserResponse {
     public String id;
     public String name;
     public String email;
-    public String password;
-    public String temporaryPassword;
     public String role;
     public int weeklyGoal = 3;
     public String initialLevel = "beginner";
@@ -13,6 +11,7 @@ public final class UserResponse {
     public boolean notificationsEnabled;
     public String accountStatus;
     public boolean mustChangePassword;
+    public boolean primaryConfigurator;
     public boolean hasPhoto;
     public String profilePhotoUpdatedAt;
     public String created_at;

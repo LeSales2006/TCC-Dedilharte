@@ -14,6 +14,7 @@ public final class SessionManager {
     private static final String KEY_EMAIL = "email";
     private static final String KEY_ROLE = "role";
     private static final String KEY_WEEKLY_GOAL = "weekly_goal";
+    private static final String KEY_PRIMARY_CONFIGURATOR = "primary_configurator";
 
     private final SharedPreferences preferences;
 
@@ -28,6 +29,7 @@ public final class SessionManager {
         }
         saveSession(token, user.id, user.name, user.email, user.role, user.weeklyGoal);
         updatePreferences(user.initialLevel, user.songGoal, user.notificationsEnabled);
+        preferences.edit().putBoolean(KEY_PRIMARY_CONFIGURATOR, user.primaryConfigurator).apply();
     }
 
     public void saveSession(String token, String userId, String name, String email, String role) {
@@ -79,6 +81,10 @@ public final class SessionManager {
 
     public String getRole() {
         return preferences.getString(KEY_ROLE, "student");
+    }
+
+    public boolean isPrimaryConfigurator() {
+        return preferences.getBoolean(KEY_PRIMARY_CONFIGURATOR, false);
     }
 
     public int getWeeklyGoal() {

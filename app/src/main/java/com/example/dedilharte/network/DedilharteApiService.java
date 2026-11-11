@@ -5,6 +5,7 @@ import com.example.dedilharte.network.model.ActivitySummaryResponse;
 import com.example.dedilharte.network.model.ArpeggioListResponse;
 import com.example.dedilharte.network.model.ArpeggioRequest;
 import com.example.dedilharte.network.model.ArpeggioResponse;
+import com.example.dedilharte.network.model.DeleteAccountRequest;
 import com.example.dedilharte.network.model.LoginRequest;
 import com.example.dedilharte.network.model.LearningModuleListResponse;
 import com.example.dedilharte.network.model.LearningModuleItemRequest;
@@ -74,6 +75,9 @@ public interface DedilharteApiService {
 
     @GET("api/users/me")
     Call<UserResponse> getMe();
+
+    @DELETE("api/users/me")
+    Call<Void> deleteOwnAccount(@Body DeleteAccountRequest request);
 
     @Multipart
     @PUT("api/users/me/photo")

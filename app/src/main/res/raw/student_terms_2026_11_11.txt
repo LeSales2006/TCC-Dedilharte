@@ -1,0 +1,41 @@
+TERMOS DE USO DO DEDILHARTE
+Versão 2026-11-11 — 11 de novembro de 2026
+
+1. Finalidade e alcance
+O Dedilharte é um aplicativo de apoio ao estudo de violão. Oferece conteúdos de aprendizagem, músicas e tablaturas, exercícios de arpejos, atividades de perguntas e respostas (Trivias), ferramentas de prática e acompanhamento do progresso e de metas de estudo. Os recursos disponíveis dependem do conteúdo cadastrado e da versão do aplicativo. O uso não garante determinado resultado ou prazo de aprendizagem.
+Estes termos se aplicam à criação pública de conta de aluno. Contas administrativas e de configuração são gerenciadas internamente e não são obtidas por este cadastro.
+
+2. Conta de aluno
+Forneça seu nome e um e-mail válido ao qual tenha acesso e crie uma senha que cumpra os requisitos apresentados no cadastro. Não se passe por outra pessoa. O cadastro público cria exclusivamente uma conta de aluno e não concede permissões de administrador ou configurador.
+Mantenha seus dados atualizados e proteja sua senha. Não compartilhe credenciais nem tente acessar contas de terceiros. A recuperação de senha utiliza o e-mail informado e um código de verificação. Se não solicitou uma recuperação, não compartilhe o código recebido.
+Se você for menor de idade, utilize o aplicativo com a orientação de seu responsável, conforme as regras aplicáveis à sua situação. O cadastro não solicita data de nascimento nem verifica a idade.
+
+3. Estudo e preferências
+Você pode informar nível inicial, metas de estudo e preferência de notificações. O aplicativo registra atividades e progresso para apresentar o acompanhamento dos estudos. Você pode ajustar as opções disponíveis no perfil e nas configurações. A preferência de notificações não substitui a permissão do sistema Android.
+Use as ferramentas de prática de maneira confortável, respeitando seus limites e o volume adequado ao utilizar áudio. O conteúdo é material de apoio ao estudo.
+
+4. Uso permitido e conteúdo
+Utilize o aplicativo para suas atividades de aprendizagem. Não explore falhas, burle controles de acesso, automatize tentativas de senha, comprometa a disponibilidade do serviço nem altere indevidamente dados de outros usuários.
+Respeite os direitos sobre músicas, tablaturas, imagens e demais materiais. A disponibilização de conteúdo para estudo não transfere sua titularidade nem autoriza sua exploração comercial ou redistribuição sem a autorização necessária. Não utilize a foto de outra pessoa sem autorização.
+
+5. Acesso, atualizações e disponibilidade
+Funções que consultam ou sincronizam dados com o servidor dependem de conexão e da disponibilidade do serviço. Podem ocorrer falhas ou interrupções; não há garantia de funcionamento ininterrupto. O conteúdo e o aplicativo podem receber correções e atualizações. Esses limites não afastam direitos assegurados pela legislação aplicável.
+As permissões de acesso são controladas pelo servidor. Contas podem ser bloqueadas pela gestão interna do sistema. Estes termos não concedem autorização para bloqueios contrários à legislação nem afastam a responsabilidade de quem administra o serviço.
+
+6. Perfil e encerramento
+Nas opções disponíveis, o aluno pode atualizar seus dados e preferências, alterar sua senha, adicionar ou remover uma foto de perfil e solicitar a exclusão da própria conta mediante confirmação de senha. Cancelar este cadastro não cria conta nem registra aceite. Se optar por não concordar, você pode fechar este diálogo e manter os dados no formulário para revisão.
+
+7. Aceite e versão
+Ao marcar “Li e concordo com os Termos de Uso” e selecionar “Concordar e cadastrar”, você solicita a criação da conta de aluno e manifesta concordância com esta versão. A versão e o momento do aceite são registrados no servidor junto à conta, se o cadastro for concluído. Ler ou rolar o texto, sem a confirmação, não constitui aceite. Este aceite não autoriza, por si só, tratamentos de dados para finalidades diferentes das informadas.
+
+8. Política de Privacidade
+Esta seção é a Política de Privacidade disponível neste cadastro e descreve os dados usados pelos recursos atuais do Dedilharte.
+Cadastro e autenticação: nome e e-mail identificam a conta. A senha é armazenada no servidor como hash para verificação de acesso. O aplicativo mantém uma sessão de autenticação no dispositivo para permitir o acesso à conta.
+Perfil e aprendizagem: o sistema armazena o nível inicial, metas, preferência de notificações, atividades e progresso associados ao usuário para personalizar e acompanhar o estudo. A foto de perfil é opcional e pode ser removida. O aplicativo também guarda preferências e dados locais usados pelos seus recursos.
+Recuperação de acesso e segurança: o e-mail é usado para enviar o código de recuperação por meio do serviço de envio configurado no servidor. O sistema registra controles temporários de tentativas para limitar abusos de autenticação e recuperação. A versão dos termos e a data/hora de aceitação comprovam o aceite no cadastro.
+Operação: os dados da conta são transmitidos à API do Dedilharte e armazenados em PostgreSQL para funcionamento e sincronização. Pessoas com permissões administrativas ou de configuração podem gerenciar contas e conteúdo conforme as permissões do sistema. Não publique senha ou código de recuperação em campos do perfil.
+Controle pelo aluno: utilize o perfil e as configurações para consultar e corrigir os dados disponíveis, gerenciar foto e preferências e excluir sua conta. O aceite destes termos não representa renúncia aos direitos relativos aos seus dados pessoais previstos na legislação.
+Mudanças nas finalidades ou nas informações desta política devem ser apresentadas de forma clara aos usuários afetados.
+
+9. Disposições finais
+Aplicam-se as leis brasileiras e os direitos legalmente assegurados ao usuário. Nenhuma disposição destes termos limita direitos que não possam ser afastados por acordo. Em caso de alteração do texto, a nova publicação deve ser identificada por uma nova versão; o registro desta versão permanece associado ao aceite realizado no cadastro.

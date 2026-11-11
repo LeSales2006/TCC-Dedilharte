@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { requireAdmin, requireConfigurator } = require('../src/middleware/authMiddleware');
+const { requireAdmin, requireConfigurator, requireSelfOrAdmin, requireStudentOrAdmin } = require('../src/middleware/authMiddleware');
 
 function response() {
   return {
@@ -68,4 +68,47 @@ test('requireConfigurator permite configurator', () => {
 
   assert.equal(nextCalled, true);
   assert.equal(res.statusCode, 200);
+});
+
+test('requireStudentOrAdmin bloqueia configurator em conteudo de aluno', () => {
+  const req = { user: { id: 'config-1', role: 'configurator' } };
+  const res = response();
+  let nextCalled = false;
+
+  requireStudentOrAdmin(req, res, () => {
+    nextCalled = true;
+  });
+
+  assert.equal(nextCalled, false);
+  assert.equal(res.statusCode, 403);
+});
+
+test('requireStudentOrAdmin permite student e admin', () => {
+  for (const role of ['student', 'admin']) {
+    const res = response();
+    let nextCalled = false;
+    requireStudentOrAdmin({ user: { id: `${role}-1`, role } }, res, () => {
+      nextCalled = true;
+    });
+    assert.equal(nextCalled, true);
+  }
+});
+
+test('requireSelfOrAdmin impede configurator de acessar outro usuario', () => {
+  const res = response();
+  let nextCalled = false;
+  requireSelfOrAdmin('id')({ user: { id: 'config-1', role: 'configurator' }, params: { id: 'other' } }, res, () => {
+    nextCalled = true;
+  });
+  assert.equal(nextCalled, false);
+  assert.equal(res.statusCode, 403);
+});
+
+test('requireSelfOrAdmin permite configurator acessar a propria conta', () => {
+  const res = response();
+  let nextCalled = false;
+  requireSelfOrAdmin('id')({ user: { id: 'config-1', role: 'configurator' }, params: { id: 'config-1' } }, res, () => {
+    nextCalled = true;
+  });
+  assert.equal(nextCalled, true);
 });

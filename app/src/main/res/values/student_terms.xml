@@ -1,0 +1,17 @@
+<resources>
+    <string name="student_terms_version" translatable="false">2026-11-11</string>
+    <string name="student_terms_title">Termos de Uso</string>
+    <string name="student_terms_scroll_hint">Role até o final para habilitar o aceite.</string>
+    <string name="student_terms_accept">Li e concordo com os Termos de Uso</string>
+    <string name="student_terms_submit">Concordar e cadastrar</string>
+    <string name="student_terms_cancel">Cancelar</string>
+    <string name="student_terms_load_error">Não foi possível abrir os termos. Tente novamente.</string>
+    <style name="StudentTermsDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="shapeAppearanceOverlay">@style/StudentTermsDialogCorners</item>
+        <item name="colorSurface">@color/theme_page</item>
+    </style>
+    <style name="StudentTermsDialogCorners" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">20dp</item>
+    </style>
+</resources>

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:padding="20dp">
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="@string/student_terms_title" android:textSize="23sp"
+        android:textStyle="bold" android:textColor="@color/theme_page_text" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="8dp" android:layout_marginBottom="12dp"
+        android:text="@string/student_terms_scroll_hint" android:textColor="@color/theme_page_body" />
+    <ScrollView android:id="@+id/studentTermsScroll"
+        android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
+        android:scrollbars="vertical" android:fadeScrollbars="false" android:fillViewport="true">
+        <TextView android:id="@+id/studentTermsText"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textSize="16sp" android:lineSpacingExtra="4dp"
+            android:textColor="@color/theme_page_text" android:paddingEnd="8dp"
+            android:paddingBottom="16dp" />
+    </ScrollView>
+    <com.google.android.material.checkbox.MaterialCheckBox android:id="@+id/studentTermsAccept"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:minHeight="48dp" android:enabled="false" android:checked="false"
+        android:saveEnabled="false" android:text="@string/student_terms_accept"
+        android:textColor="@color/theme_page_text" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/studentTermsSubmit"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:minHeight="52dp" android:enabled="false"
+        android:text="@string/student_terms_submit" android:textColor="@color/theme_ink"
+        app:backgroundTint="@color/student_terms_button" app:cornerRadius="16dp" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/studentTermsCancel"
+        style="@style/Widget.Material3.Button.TextButton"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:minHeight="48dp" android:text="@string/student_terms_cancel"
+        android:textColor="@color/theme_page_text" />
+</LinearLayout>

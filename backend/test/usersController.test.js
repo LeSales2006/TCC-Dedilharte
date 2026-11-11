@@ -57,5 +57,7 @@ test('listManagedUsers lista usuarios sem consultar senha em texto claro', async
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.items.length, 1);
   assert.equal(res.body.items[0].id, 'user-1');
-  assert.equal(res.body.items[0].temporaryPassword, '');
+  assert.equal('temporaryPassword' in res.body.items[0], false);
+  assert.equal('password' in res.body.items[0], false);
+  assert.equal(res.body.items[0].primaryConfigurator, false);
 });

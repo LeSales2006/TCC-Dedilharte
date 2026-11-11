@@ -46,7 +46,8 @@ Alterações anteriores de telas, áudio e outros recursos foram preservadas.
 - O novo teste de migration isolada reproduziu uma falha que os testes anteriores
   não detectavam: executar `schema.sql` antes da migration já criava o índice de
   e-mail, ocultando sua ausência na migration. A migration agora cria esse índice
-  e inclui `managed_password`, exigida pelas rotas de gestão de usuários.
+  e mantém credenciais apenas em `password_hash` (bcrypt), removendo a coluna
+  legada `managed_password`.
 - E-mails duplicados preexistentes abortam a migration com rollback, preservando
   as contas. A nova consulta `backend/diagnostics/preflight_compat.sql` funciona
   antes da conversão dos campos legados e retorna metadados/contagens, sem dados

@@ -48,6 +48,7 @@ public final class RegisterActivity extends AppCompatActivity {
     private com.example.dedilharte.view.PreferencesFields preferences;
     private boolean personalizing;
     private Call<AuthResponse> pendingCall;
+    private androidx.appcompat.app.AlertDialog termsDialog;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -111,6 +112,15 @@ public final class RegisterActivity extends AppCompatActivity {
         RegisterRequest request = new RegisterRequest(name, email, password);
         request.initialLevel = preferences.level(); request.weeklyGoal = preferences.weeklyGoal.getSelectedItemPosition() + 1;
         request.songGoal = songs; request.notificationsEnabled = preferences.notifications.isChecked();
+        if (termsDialog != null && termsDialog.isShowing()) return;
+        termsDialog = com.example.dedilharte.view.TermsDialog.show(this, () -> {
+            request.termsAccepted = true;
+            request.termsVersion = getString(R.string.student_terms_version);
+            submitRegistration(request);
+        });
+    }
+
+    private void submitRegistration(RegisterRequest request) {
         setLoading(true);
         pendingCall = api.register(request);
         pendingCall.enqueue(new Callback<AuthResponse>() {
@@ -198,11 +208,15 @@ public final class RegisterActivity extends AppCompatActivity {
         personalizing = personalize;
         for (View view : new View[]{nameInput, emailInput, findViewById(R.id.registerPasswordContainer), findViewById(R.id.registerConfirmPasswordContainer)}) view.setVisibility(personalize ? View.GONE : View.VISIBLE);
         findViewById(R.id.registerPreferences).setVisibility(personalize ? View.VISIBLE : View.GONE);
-        registerButton.setText(personalize ? "CRIAR CONTA" : "CONTINUAR");
+        registerButton.setText(personalize ? "CADASTRAR" : "CONTINUAR");
         loginLink.setText(personalize ? "Voltar aos dados" : "Entrar");
     }
     @Override protected void onSaveInstanceState(Bundle state) { state.putBoolean("personalizing", personalizing); super.onSaveInstanceState(state); }
-    @Override protected void onDestroy() { if (pendingCall != null) pendingCall.cancel(); super.onDestroy(); }
+    @Override protected void onDestroy() {
+        if (termsDialog != null) termsDialog.dismiss();
+        if (pendingCall != null) pendingCall.cancel();
+        super.onDestroy();
+    }
     private void openMain() {
         Intent intent = new Intent(this, MainActivity.class);
         intent.putExtra("request_notifications", sessionManager.notificationsEnabled());

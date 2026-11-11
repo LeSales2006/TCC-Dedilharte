@@ -15,6 +15,7 @@ const {
   requireAdmin,
   requireStaff,
   requireConfigurator,
+  requireStudentOrAdmin,
 } = require('../middleware/authMiddleware');
 
 const router = express.Router();
@@ -28,19 +29,20 @@ router.use(authenticateToken);
 router.get('/profile', usersController.getProfile);
 router.put('/profile', rateLimit('profile-user', 30, 900, req => req.user.id), usersController.updateProfile);
 router.get('/users/me', usersController.getProfile);
+router.delete('/users/me', rateLimit('delete-own-user', 5, 900, req => req.user.id), usersController.deleteOwnAccount);
 router.put('/users/me/photo', upload.single('photo'), usersController.uploadMyPhoto);
 router.get('/users/me/photo', usersController.getMyPhoto);
 router.delete('/users/me/photo', usersController.deleteMyPhoto);
-router.post('/activity', activityController.recordAccess);
-router.get('/activity/summary', activityController.getSummary);
-router.get('/songs/progress', songProgressController.listSongProgress);
-router.post('/songs/progress', songProgressController.upsertSongProgress);
-router.get('/songs', songsController.listPublic);
-router.get('/arpeggios', arpeggiosController.listPublic);
-router.get('/arpeggios/:id', arpeggiosController.getPublic);
-router.get('/modules', modulesController.listPublic);
-router.get('/module-progress', moduleProgressController.listMyProgress);
-router.post('/module-items/:id/progress', moduleProgressController.upsertMyProgress);
+router.post('/activity', requireStudentOrAdmin, activityController.recordAccess);
+router.get('/activity/summary', requireStudentOrAdmin, activityController.getSummary);
+router.get('/songs/progress', requireStudentOrAdmin, songProgressController.listSongProgress);
+router.post('/songs/progress', requireStudentOrAdmin, songProgressController.upsertSongProgress);
+router.get('/songs', requireStudentOrAdmin, songsController.listPublic);
+router.get('/arpeggios', requireStudentOrAdmin, arpeggiosController.listPublic);
+router.get('/arpeggios/:id', requireStudentOrAdmin, arpeggiosController.getPublic);
+router.get('/modules', requireStudentOrAdmin, modulesController.listPublic);
+router.get('/module-progress', requireStudentOrAdmin, moduleProgressController.listMyProgress);
+router.post('/module-items/:id/progress', requireStudentOrAdmin, moduleProgressController.upsertMyProgress);
 router.get('/admin/arpeggios', requireStaff, arpeggiosController.listAdmin);
 router.post('/admin/arpeggios', requireStaff, arpeggiosController.createAdmin);
 router.put('/admin/arpeggios/:id', requireStaff, arpeggiosController.updateAdmin);
@@ -65,7 +67,7 @@ router.post('/users', usersController.upsertUser);
 router.get('/users/:id', requireSelfOrAdmin('id'), usersController.getUser);
 router.put('/users/:id', requireSelfOrAdmin('id'), usersController.updateUser);
 router.delete('/users/:id', requireSelfOrAdmin('id'), usersController.deleteUser);
-router.get('/users/:userId/progress', requireSelfOrAdmin('userId'), progressController.getProgress);
-router.post('/users/:userId/progress', requireSelfOrAdmin('userId'), progressController.upsertProgress);
+router.get('/users/:userId/progress', requireStudentOrAdmin, requireSelfOrAdmin('userId'), progressController.getProgress);
+router.post('/users/:userId/progress', requireStudentOrAdmin, requireSelfOrAdmin('userId'), progressController.upsertProgress);
 
 module.exports = router;

@@ -3,8 +3,8 @@ CREATE TABLE IF NOT EXISTS users (
     name TEXT NOT NULL,
     email TEXT,
     password_hash TEXT,
-    managed_password TEXT,
     role TEXT NOT NULL DEFAULT 'student',
+    is_primary_configurator BOOLEAN NOT NULL DEFAULT FALSE,
     weekly_goal SMALLINT NOT NULL DEFAULT 3,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -18,11 +18,27 @@ ALTER TABLE users
 ALTER TABLE users
     ADD COLUMN IF NOT EXISTS password_hash TEXT;
 
-ALTER TABLE users
-    ADD COLUMN IF NOT EXISTS managed_password TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_version TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'users'::regclass AND conname = 'chk_users_terms_acceptance') THEN
+        ALTER TABLE users ADD CONSTRAINT chk_users_terms_acceptance CHECK (
+            (terms_version IS NULL AND terms_accepted_at IS NULL) OR
+            (terms_version IS NOT NULL AND length(trim(terms_version)) > 0 AND terms_accepted_at IS NOT NULL)
+        );
+    END IF;
+END $$;
 
 ALTER TABLE users
     ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'student';
+
+ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS is_primary_configurator BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS account_status TEXT NOT NULL DEFAULT 'active';
 
 ALTER TABLE users
     ADD COLUMN IF NOT EXISTS weekly_goal SMALLINT NOT NULL DEFAULT 3;
@@ -50,6 +66,52 @@ BEGIN
             ADD CONSTRAINT chk_users_weekly_goal CHECK (weekly_goal BETWEEN 1 AND 7);
     END IF;
 END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'users'::regclass AND conname = 'chk_users_primary_configurator'
+    ) THEN
+        ALTER TABLE users
+            ADD CONSTRAINT chk_users_primary_configurator
+            CHECK (NOT is_primary_configurator OR role = 'configurator');
+    END IF;
+END $$;
+
+-- Only one primary configurator account can exist. The immutable flag is the
+-- account identity; display names and e-mails may change without weakening it.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_users_primary_configurator
+    ON users (is_primary_configurator)
+    WHERE is_primary_configurator;
+
+CREATE OR REPLACE FUNCTION protect_primary_configurator_account()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        IF OLD.is_primary_configurator THEN
+            RAISE EXCEPTION 'A conta principal do configurador nao pode ser excluida.';
+        END IF;
+        RETURN OLD;
+    END IF;
+
+    IF OLD.is_primary_configurator THEN
+        IF NEW.is_primary_configurator IS DISTINCT FROM TRUE
+           OR NEW.role IS DISTINCT FROM OLD.role
+           OR NEW.account_status IS DISTINCT FROM OLD.account_status
+           OR NEW.email IS NULL
+           OR NEW.password_hash IS NULL THEN
+            RAISE EXCEPTION 'A conta principal do configurador e protegida.';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_protect_primary_configurator ON users;
+CREATE TRIGGER trg_protect_primary_configurator
+    BEFORE UPDATE OR DELETE ON users
+    FOR EACH ROW EXECUTE FUNCTION protect_primary_configurator_account();
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email
     ON users (LOWER(email))
@@ -114,8 +176,8 @@ BEGIN;
 ALTER TABLE users
     ADD COLUMN IF NOT EXISTS email TEXT,
     ADD COLUMN IF NOT EXISTS password_hash TEXT,
-    ADD COLUMN IF NOT EXISTS managed_password TEXT,
     ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'student',
+    ADD COLUMN IF NOT EXISTS is_primary_configurator BOOLEAN NOT NULL DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS weekly_goal SMALLINT NOT NULL DEFAULT 3,
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     ADD COLUMN IF NOT EXISTS account_status TEXT NOT NULL DEFAULT 'active',

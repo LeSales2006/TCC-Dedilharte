@@ -307,7 +307,7 @@ public class MainActivity extends AppCompatActivity {
         syncManager = new DedilharteSyncManager();
         songRepository = new SongRepository(this);
         arpeggioRepository = new ArpeggioRepository(this);
-        recordDailyAccess();
+        recordDailyAccessIfStudent();
         updateCalculatedLevel();
         courseLevel = level;
 
@@ -542,6 +542,9 @@ public class MainActivity extends AppCompatActivity {
         syncManager.fetchRemoteUser(currentUserId, user -> {
             if (isCurrentProgressSession(profileOwner, profileToken)) applyRemoteUserIfNewer(user);
         });
+        if (isConfigurator()) {
+            return;
+        }
         syncAllProgress(includeAllProgress);
         final String progressOwner = currentUserId;
         final String progressToken = sessionManager.getToken();
@@ -618,6 +621,12 @@ public class MainActivity extends AppCompatActivity {
             showSongs();
         } else if (screen == Screen.HOME) {
             showHome();
+        }
+    }
+
+    private void recordDailyAccessIfStudent() {
+        if (!isConfigurator()) {
+            recordDailyAccess();
         }
     }
 
@@ -706,6 +715,19 @@ public class MainActivity extends AppCompatActivity {
             showWelcome();
             return;
         }
+        if (isConfigurator()) {
+            if (sessionManager.isPrimaryConfigurator()) {
+                new AlertDialog.Builder(this)
+                        .setIcon(MaterialIcons.dialogWarning(this))
+                        .setTitle("Conta principal protegida")
+                        .setMessage("Esta conta não pode ser excluída. Você ainda pode sair normalmente.")
+                        .setPositiveButton("Entendi", null)
+                        .show();
+                return;
+            }
+            showConfiguratorDeleteDialog();
+            return;
+        }
         new AlertDialog.Builder(this)
                 .setIcon(MaterialIcons.dialogWarning(this))
                 .setTitle("Excluir sua conta?")
@@ -715,12 +737,78 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+    private void showConfiguratorDeleteDialog() {
+        EditText password = new EditText(this);
+        password.setHint("Senha atual");
+        password.setSingleLine(true);
+        password.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        int padding = dp(20);
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(padding, dp(8), padding, 0);
+        form.addView(password, matchWrap(0, 0));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setIcon(MaterialIcons.dialogWarning(this))
+                .setTitle("Excluir sua conta?")
+                .setMessage("Confirme sua senha atual. Seu acesso será removido permanentemente e esta ação não pode ser desfeita.")
+                .setView(form)
+                .setNegativeButton("Cancelar", null)
+                .setPositiveButton("Excluir conta", null)
+                .create();
+        dialog.setOnShowListener(ignored -> {
+            android.widget.Button positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            positive.setOnClickListener(v -> {
+                String currentPassword = password.getText().toString();
+                if (currentPassword.isEmpty()) {
+                    password.setError("Informe sua senha atual");
+                    return;
+                }
+                positive.setEnabled(false);
+                password.setEnabled(false);
+                DedilharteApiClient.service()
+                        .deleteOwnAccount(new com.example.dedilharte.network.model.DeleteAccountRequest(currentPassword))
+                        .enqueue(new Callback<Void>() {
+                            @Override
+                            public void onResponse(Call<Void> call, Response<Void> response) {
+                                if (response.isSuccessful()) {
+                                    String deletedUserId = currentUserId;
+                                    dialog.dismiss();
+                                    clearLocalAccountAndLogout(deletedUserId, false);
+                                } else {
+                                    positive.setEnabled(true);
+                                    password.setEnabled(true);
+                                    Toast.makeText(MainActivity.this,
+                                            com.example.dedilharte.network.ApiErrors.message(response, "Não foi possível excluir a conta."),
+                                            Toast.LENGTH_LONG).show();
+                                }
+                            }
+
+                            @Override
+                            public void onFailure(Call<Void> call, Throwable t) {
+                                positive.setEnabled(true);
+                                password.setEnabled(true);
+                                Toast.makeText(MainActivity.this, "Falha de conexão", Toast.LENGTH_SHORT).show();
+                            }
+                        });
+            });
+        });
+        dialog.show();
+    }
+
     private void deleteCurrentAccount() {
+        clearLocalAccountAndLogout(currentUserId, true);
+    }
+
+    private void clearLocalAccountAndLogout(String deletedUserId, boolean notifyServer) {
+        if (deletedUserId == null || deletedUserId.trim().isEmpty()) {
+            openLoginAndFinish();
+            return;
+        }
         stopPractice();
         currentLesson = null;
         currentSong = null;
 
-        String deletedUserId = currentUserId;
         Set<String> accounts = accountIds();
         accounts.remove(deletedUserId);
 
@@ -743,8 +831,12 @@ public class MainActivity extends AppCompatActivity {
         }
         editor.apply();
 
-        syncManager.deleteUser(deletedUserId);
-        progressStore.deleteUserData(deletedUserId);
+        if (notifyServer && syncManager != null) {
+            syncManager.deleteUser(deletedUserId);
+        }
+        if (progressStore != null) {
+            progressStore.deleteUserData(deletedUserId);
+        }
         if (activityStore != null) {
             activityStore.deleteUserData(deletedUserId);
         }
@@ -756,7 +848,9 @@ public class MainActivity extends AppCompatActivity {
             sessionManager.clearSession();
         }
         loadActiveProfile();
-        progressStore.setUserId(currentUserId);
+        if (progressStore != null) {
+            progressStore.setUserId(currentUserId);
+        }
         Toast.makeText(this, "Conta excluida", Toast.LENGTH_SHORT).show();
         openLoginAndFinish();
     }
@@ -837,6 +931,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showHome() {
+        if (isConfigurator()) {
+            showConfiguratorDashboard();
+            return;
+        }
         stopPractice();
         screen = Screen.HOME;
         currentLesson = null;
@@ -1521,6 +1619,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showArpeggios() {
+        if (isConfigurator()) {
+            showConfiguratorDashboard();
+            return;
+        }
         stopPractice();
         screen = Screen.ARPEGGIOS;
         currentLesson = null;
@@ -1749,6 +1851,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showSongs() {
+        if (isConfigurator()) {
+            showConfiguratorDashboard();
+            return;
+        }
         stopPractice();
         screen = Screen.SONGS;
         currentLesson = null;
@@ -1902,7 +2008,7 @@ public class MainActivity extends AppCompatActivity {
         root.removeAllViews();
 
         LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(pageHeader("Painel configurador", this::showProgress),
+        shell.addView(pageHeader("Painel configurador", this::finish),
                 new LinearLayout.LayoutParams(-1, dp(72)));
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
@@ -1913,7 +2019,7 @@ public class MainActivity extends AppCompatActivity {
         users.setOnClickListener(v -> showUserManagement());
         content.addView(users, matchWrap(0, 12));
 
-        TextView settings = button("Configurações", SOFT, DARK, 54, R.drawable.ic_ms_settings);
+        TextView settings = button("Configurações da conta", SOFT, DARK, 54, R.drawable.ic_ms_settings);
         settings.setOnClickListener(v -> showSettings());
         content.addView(settings, matchWrap(0, 0));
 
@@ -3021,6 +3127,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showProgress() {
+        if (isConfigurator()) {
+            showConfiguratorDashboard();
+            return;
+        }
         stopPractice();
         screen = Screen.PROGRESS;
         currentLesson = null;
@@ -3055,6 +3165,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showDynamicModule(LearningModuleResponse module) {
+        if (isConfigurator()) {
+            showConfiguratorDashboard();
+            return;
+        }
         stopPractice();
         screen = Screen.MODULE;
         currentLesson = null;
@@ -3302,8 +3416,13 @@ public class MainActivity extends AppCompatActivity {
         root.removeAllViews();
 
         LinearLayout shell = column(WHITE, Gravity.TOP);
-        shell.addView(pageHeader("Configurações", this::showProgress),
-                new LinearLayout.LayoutParams(-1, dp(72)));
+        shell.addView(pageHeader("Configurações", () -> {
+            if (isConfigurator()) {
+                showConfiguratorDashboard();
+            } else {
+                showProgress();
+            }
+        }), new LinearLayout.LayoutParams(-1, dp(72)));
 
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column(WHITE, Gravity.TOP);
@@ -3344,9 +3463,17 @@ public class MainActivity extends AppCompatActivity {
         logoutButton.setOnClickListener(v -> confirmLogout());
         content.addView(logoutButton, matchWrap(0, 12));
 
-        TextView deleteButton = settingsItem("Excluir conta", ThemeStore.isNight(this) ? Color.rgb(139, 30, 30) : Color.rgb(188, 48, 48), R.drawable.ic_ms_delete);
-        deleteButton.setOnClickListener(v -> confirmDeleteAccount());
-        content.addView(deleteButton, matchWrap(0, 0));
+        if (!isConfigurator() || !sessionManager.isPrimaryConfigurator()) {
+            TextView deleteButton = settingsItem("Excluir conta", ThemeStore.isNight(this) ? Color.rgb(139, 30, 30) : Color.rgb(188, 48, 48), R.drawable.ic_ms_delete);
+            deleteButton.setOnClickListener(v -> confirmDeleteAccount());
+            content.addView(deleteButton, matchWrap(0, 0));
+        } else {
+            TextView protectedNote = text(
+                    "A conta principal do configurador não pode ser excluída.",
+                    14, PAGE_BODY, false, Gravity.START, 0, 4
+            );
+            content.addView(protectedNote, matchWrap(0, 0));
+        }
 
         scroll.addView(content);
         shell.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -3429,31 +3556,39 @@ public class MainActivity extends AppCompatActivity {
             card.setBackground(roundRect(SOFT, 14));
             String name = safeText(user.name).trim().isEmpty() ? "Usuário" : safeText(user.name);
             String email = safeText(user.email).trim().isEmpty() ? "Sem login" : safeText(user.email);
-            String password = managedPassword(user);
             card.addView(text(name, 18, DARK, true, Gravity.START, 0, 6));
             card.addView(text(
-                    "Login: " + email + "\nSenha: " + password,
+                    "Login: " + email + "\nPerfil: " + managedRoleLabel(user.role),
                     14, TEXT, false, Gravity.START, 0, 12
             ));
 
+            boolean isSelf = user.id != null && user.id.equals(currentUserId);
+            boolean locked = isSelf || user.primaryConfigurator;
             Spinner role = managedRoleSpinner(user.role);
+            role.setEnabled(!locked);
             card.addView(role, matchWrap(0, 10));
-            TextView save = button("SALVAR PERFIL", DARK, WHITE, 48, R.drawable.ic_ms_save);
-            save.setOnClickListener(v -> updateManagedRole(user, selectedManagedRole(role)));
-            card.addView(save, matchWrap(0, 0));
+            if (user.primaryConfigurator) {
+                card.addView(text("Conta principal protegida: função imutável.", 13, PAGE_BODY, false, Gravity.START, 0, 8));
+            } else if (isSelf) {
+                card.addView(text("Você não pode alterar sua própria função.", 13, PAGE_BODY, false, Gravity.START, 0, 8));
+            }
+            if (!locked) {
+                TextView save = button("SALVAR PERFIL", DARK, WHITE, 48, R.drawable.ic_ms_save);
+                save.setOnClickListener(v -> updateManagedRole(user, selectedManagedRole(role)));
+                card.addView(save, matchWrap(0, 0));
+            }
             list.addView(card, matchWrap(0, 12));
         }
     }
 
-    private String managedPassword(UserResponse user) {
-        if (user == null) {
-            return "não disponível";
+    private String managedRoleLabel(String role) {
+        if (ROLE_ADMIN.equals(role)) {
+            return "Admin";
         }
-        String password = safeText(user.temporaryPassword);
-        if (password.trim().isEmpty()) {
-            password = safeText(user.password);
+        if (ROLE_CONFIGURATOR.equals(role)) {
+            return "Configurador";
         }
-        return password.trim().isEmpty() ? "não disponível" : password;
+        return "Aluno";
     }
 
     private Spinner managedRoleSpinner(String selectedRole) {
@@ -3520,18 +3655,40 @@ public class MainActivity extends AppCompatActivity {
         View passwordContainer = getLayoutInflater().inflate(R.layout.password_field, content, false);
         EditText password = passwordContainer.findViewById(R.id.passwordField);
         password.setHint("Senha temporária");
-        Spinner role = simpleSpinner(new String[]{ROLE_STUDENT, ROLE_ADMIN, ROLE_CONFIGURATOR});
+        Spinner role = managedRoleSpinner(ROLE_STUDENT);
         content.addView(name, matchWrap(0, 10));
         content.addView(email, matchWrap(0, 10));
         content.addView(passwordContainer, matchWrap(0, 10));
         content.addView(role, matchWrap(0, 12));
         TextView save = button("CRIAR", DARK, WHITE, 56, R.drawable.ic_ms_add);
-        save.setOnClickListener(v -> DedilharteApiClient.service().createManagedUser(new ManagedUserRequest(
-                name.getText().toString().trim(),
-                email.getText().toString().trim(),
-                password.getText().toString(),
-                role.getSelectedItem().toString()
-        )).enqueue(new ToastCallback<>("Usuário criado")));
+        save.setOnClickListener(v -> {
+            save.setEnabled(false);
+            DedilharteApiClient.service().createManagedUser(new ManagedUserRequest(
+                    name.getText().toString().trim(),
+                    email.getText().toString().trim(),
+                    password.getText().toString(),
+                    selectedManagedRole(role)
+            )).enqueue(new Callback<UserResponse>() {
+                @Override
+                public void onResponse(Call<UserResponse> call, Response<UserResponse> response) {
+                    if (response.isSuccessful()) {
+                        Toast.makeText(MainActivity.this, "Usuário criado", Toast.LENGTH_SHORT).show();
+                        showUserManagement();
+                    } else {
+                        save.setEnabled(true);
+                        Toast.makeText(MainActivity.this,
+                                com.example.dedilharte.network.ApiErrors.message(response, "Não foi possível criar o usuário."),
+                                Toast.LENGTH_LONG).show();
+                    }
+                }
+
+                @Override
+                public void onFailure(Call<UserResponse> call, Throwable t) {
+                    save.setEnabled(true);
+                    Toast.makeText(MainActivity.this, "Falha de conexão", Toast.LENGTH_SHORT).show();
+                }
+            });
+        });
         content.addView(save, matchWrap(0, 0));
         scroll.addView(content);
         shell.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -3711,7 +3868,8 @@ public class MainActivity extends AppCompatActivity {
         TextView course = drawer.findViewById(R.id.drawerCourse);
         TextView home = drawer.findViewById(R.id.drawerHome);
 
-        home.setVisibility(View.VISIBLE);
+        boolean configurator = isConfigurator();
+        home.setVisibility(configurator ? View.GONE : View.VISIBLE);
         course.setVisibility(View.GONE);
 
         TextView arpeggios = drawer.findViewById(R.id.drawerArpeggios);
@@ -3721,6 +3879,14 @@ public class MainActivity extends AppCompatActivity {
         TextView settings = drawer.findViewById(R.id.drawerSettings);
         TextView admin = drawer.findViewById(R.id.drawerAdmin);
         View adminDivider = drawer.findViewById(R.id.drawerAdminDivider);
+
+        int studentVisibility = configurator ? View.GONE : View.VISIBLE;
+        progress.setVisibility(studentVisibility);
+        arpeggios.setVisibility(studentVisibility);
+        songs.setVisibility(studentVisibility);
+        triviaBeginner.setVisibility(studentVisibility);
+        triviaIntermediate.setVisibility(studentVisibility);
+        currentLevel.setVisibility(studentVisibility);
 
         bindProfilePhoto(avatar);
         name.setText(userName);
@@ -3810,6 +3976,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void openFixedTriviaModule(String moduleId, String moduleTitle) {
+        if (isConfigurator()) {
+            showConfiguratorDashboard();
+            return;
+        }
         stopPractice();
         screen = Screen.MODULE;
         currentLesson = null;
@@ -3928,15 +4098,23 @@ public class MainActivity extends AppCompatActivity {
         View panel = getLayoutInflater().inflate(R.layout.dialog_edit_profile, null, false);
         shell.addView(panel, new LinearLayout.LayoutParams(-1, 0, 1));
         root.addView(shell, matchMatch());
+        boolean configurator = isConfigurator();
         com.example.dedilharte.view.PreferencesFields preferences = new com.example.dedilharte.view.PreferencesFields(this, sessionManager.getInitialLevel(), weeklyGoal, sessionManager.getSongGoal(), sessionManager.notificationsEnabled(), false);
         ((LinearLayout) panel.findViewById(R.id.editPreferences)).addView(preferences);
         panel.findViewById(R.id.editPassword).setOnClickListener(v -> com.example.dedilharte.view.PasswordDialogs.change(this, DedilharteApiClient.service(), this::logout));
         ImageView avatar = panel.findViewById(R.id.editAvatar);
         TextView photoButton = panel.findViewById(R.id.editPhotoButton);
         EditText name = panel.findViewById(R.id.editName);
+        EditText email = panel.findViewById(R.id.editEmail);
         TextView goalMinus = panel.findViewById(R.id.editGoalMinus);
         TextView goalValue = panel.findViewById(R.id.editGoalValue);
         TextView goalPlus = panel.findViewById(R.id.editGoalPlus);
+        if (configurator) {
+            panel.findViewById(R.id.editPhotoRow).setVisibility(View.GONE);
+            panel.findViewById(R.id.editGoalLabel).setVisibility(View.GONE);
+            panel.findViewById(R.id.editGoalRow).setVisibility(View.GONE);
+            panel.findViewById(R.id.editPreferences).setVisibility(View.GONE);
+        }
         MaterialIcons.iconOnly(goalMinus, R.drawable.ic_ms_remove, DARK, "Diminuir meta semanal");
         MaterialIcons.iconOnly(goalPlus, R.drawable.ic_ms_add, DARK, "Aumentar meta semanal");
         TextView save = panel.findViewById(R.id.editSave);
@@ -3948,6 +4126,7 @@ public class MainActivity extends AppCompatActivity {
         profilePhotoPreview = avatar;
         bindProfilePhoto(profilePhotoPreview);
         name.setText(userName);
+        email.setText(sessionManager.getEmail());
         updateGoalLabel(goalValue, editingWeeklyGoal);
 
         photoButton.setOnClickListener(v -> openProfilePhotoPicker());
@@ -3963,19 +4142,26 @@ public class MainActivity extends AppCompatActivity {
         save.setOnClickListener(v -> {
             String typed = name.getText().toString().trim();
             if (typed.length() < 2 || typed.length() > 180) { name.setError("Use de 2 a 180 caracteres"); return; }
-            int songs = preferences.songs(); if (songs < 1) return;
+            String typedEmail = email.getText().toString().trim();
+            if (typedEmail.isEmpty() || !android.util.Patterns.EMAIL_ADDRESS.matcher(typedEmail).matches()) {
+                email.setError("Informe um e-mail válido"); return;
+            }
             com.example.dedilharte.network.model.UserRequest request = new com.example.dedilharte.network.model.UserRequest(owner, typed, editingWeeklyGoal, System.currentTimeMillis());
-            request.initialLevel = preferences.level(); request.songGoal = songs; request.notificationsEnabled = preferences.notifications.isChecked();
-            save.setEnabled(false); save.setText("Salvando…"); name.setEnabled(false); preferences.setInputsEnabled(false);
-            goalMinus.setEnabled(false); goalPlus.setEnabled(false); panel.findViewById(R.id.editPassword).setEnabled(false);
+            request.email = typedEmail;
+            if (!configurator) {
+                int songs = preferences.songs(); if (songs < 1) return;
+                request.initialLevel = preferences.level(); request.songGoal = songs; request.notificationsEnabled = preferences.notifications.isChecked();
+            }
+            save.setEnabled(false); save.setText("Salvando…"); name.setEnabled(false); email.setEnabled(false); preferences.setInputsEnabled(false);
+            goalMinus.setEnabled(false); goalPlus.setEnabled(false); photoButton.setEnabled(false); panel.findViewById(R.id.editPassword).setEnabled(false);
             retrofit2.Call<UserResponse> call = DedilharteApiClient.service().updateProfile(request, "Bearer " + token); profileSaveCall = call;
             call.enqueue(new retrofit2.Callback<UserResponse>() {
                 private boolean available() { return isCurrentProgressSession(owner, token) && !isDestroyed()
                         && screen == Screen.EDIT_PROFILE && shell.getParent() == root; }
                 private void failed(String message) {
                     if (!available()) return;
-                    save.setEnabled(true); save.setText("Salvar Edições"); name.setEnabled(true); preferences.setInputsEnabled(true);
-                    goalMinus.setEnabled(true); goalPlus.setEnabled(true); panel.findViewById(R.id.editPassword).setEnabled(true);
+                    save.setEnabled(true); save.setText("Salvar Edições"); name.setEnabled(true); email.setEnabled(true); preferences.setInputsEnabled(true);
+                    goalMinus.setEnabled(true); goalPlus.setEnabled(true); photoButton.setEnabled(true); panel.findViewById(R.id.editPassword).setEnabled(true);
                     Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
                 }
                 @Override public void onResponse(retrofit2.Call<UserResponse> call, retrofit2.Response<UserResponse> response) {
@@ -3985,12 +4171,20 @@ public class MainActivity extends AppCompatActivity {
                         failed(com.example.dedilharte.network.ApiErrors.message(response, "Não foi possível salvar o perfil. Tente novamente.")); return;
                     }
                     userName = user.name; weeklyGoal = StudentMetrics.clampGoal(user.weeklyGoal);
+                    String savedEmail = user.email == null ? typedEmail : user.email;
+                    String savedRole = user.role == null ? userRole : user.role;
+                    sessionManager.updateUser(userName, savedEmail, savedRole, weeklyGoal);
                     sessionManager.updatePreferences(user.initialLevel, user.songGoal, user.notificationsEnabled);
                     profile.edit().putLong(accountKey(currentUserId, "server_updated_at"), user.updatedAtMillis).apply();
                     setActiveUserUpdatedAt(user.updatedAtMillis); saveActiveProfile();
                     dashboardRepository.updateWeeklyGoal(weeklyGoal);
-                    profileSaveCall = null; profilePhotoPreview = null; showProgress();
-                    if (user.notificationsEnabled) com.example.dedilharte.auth.NotificationPermissions.requestIfNeeded(MainActivity.this);
+                    profileSaveCall = null; profilePhotoPreview = null;
+                    if (configurator) {
+                        showConfiguratorDashboard();
+                    } else {
+                        showProgress();
+                    }
+                    if (!configurator && user.notificationsEnabled) com.example.dedilharte.auth.NotificationPermissions.requestIfNeeded(MainActivity.this);
                 }
                 @Override public void onFailure(retrofit2.Call<UserResponse> call, Throwable error) {
                     if (!call.isCanceled()) failed("Sem conexão. As alterações não foram salvas. Tente novamente.");
@@ -4815,6 +5009,8 @@ public class MainActivity extends AppCompatActivity {
                 showAdminArpeggios();
                 break;
             case CONFIGURATOR_PANEL:
+                finish();
+                break;
             case USER_MANAGEMENT:
                 showConfiguratorDashboard();
                 break;

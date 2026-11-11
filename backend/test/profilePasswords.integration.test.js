@@ -60,7 +60,7 @@ test('PostgreSQL + HTTP: additive migration, profile, recovery codes and passwor
     const newCode = async (address = user.email) => { const result = await issue(address); assert.equal(result.status, 202); return deliveries.at(-1); };
     let user, session;
     await t.test('registration, strict preferences, authenticated profile persistence and isolation', async () => {
-      const created = await request('/auth/register', { name: 'Aluno Teste', email: 'student@example.com', password: 'Password123', initialLevel: 'intermediate', weeklyGoal: 7, songGoal: 25, notificationsEnabled: true, role: 'admin' });
+      const created = await request('/auth/register', { name: 'Aluno Teste', email: 'student@example.com', password: 'Password123', initialLevel: 'intermediate', weeklyGoal: 7, songGoal: 25, notificationsEnabled: true, role: 'student', termsAccepted: true, termsVersion: require('../src/terms').VERSION });
       assert.equal(created.status, 201); user = created.body.user; session = created.body.token;
       assert.equal(user.role, 'student'); assert.equal(user.songGoal, 25); assert.equal(user.initialLevel, 'intermediate'); assert.equal(user.notificationsEnabled, true);
       assert.equal((await request('/profile')).status, 401);

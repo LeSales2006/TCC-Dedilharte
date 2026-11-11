@@ -1,2 +1,2 @@
-ALTER TABLE users
-    ADD COLUMN IF NOT EXISTS managed_password TEXT;
+-- Legacy placeholder.
+-- managed_password was removed; credentials live only in users.password_hash (bcrypt).
