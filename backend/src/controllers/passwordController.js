@@ -139,10 +139,13 @@ async function change(req, res, next) {
   } catch (error) { await client.query('ROLLBACK'); return next(error); }
   finally { client.release(); }
 }
+
 async function replacePassword(client, id, passwordHash) {
-  await client.query(`UPDATE users SET password_hash = $2, managed_password = NULL,
+  await client.query(`UPDATE users SET password_hash = $2,
     must_change_password = FALSE, token_version = token_version + 1, updated_at = NOW() WHERE id = $1`, [id, passwordHash]);
+
   await client.query(`UPDATE password_recovery_requests SET used_at = clock_timestamp(), code_hash = NULL,
     authorization_hash = NULL WHERE user_id = $1 AND used_at IS NULL`, [id]);
 }
+
 module.exports = { requestCode, verifyCode, reset, change };
