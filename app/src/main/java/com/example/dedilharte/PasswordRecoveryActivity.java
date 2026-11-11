@@ -10,7 +10,6 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
-import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModel;
 import androidx.lifecycle.ViewModelProvider;
@@ -29,8 +28,10 @@ public final class PasswordRecoveryActivity extends AppCompatActivity {
     private Flow flow;
     private EditText email, code, password, confirm;
     private Button submit, resend;
+    private static final String SUCCESS_MESSAGE = "Senha redefinida. Entre novamente com a nova senha.";
     private String displayedRequest;
     private int displayedStep = -1;
+    private boolean navigationStarted;
     private ClipboardManager clipboard;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final ClipboardManager.OnPrimaryClipChangedListener clipListener = this::pasteCode;
@@ -109,9 +110,15 @@ public final class PasswordRecoveryActivity extends AppCompatActivity {
                     .hide(androidx.core.view.WindowInsetsCompat.Type.ime());
         }
         if (flow.step == 3) {
+            if (navigationStarted) return;
+            navigationStarted = true;
             new SessionManager(this).clearSession();
-            Toast.makeText(this, flow.status, Toast.LENGTH_LONG).show();
-            startActivity(new Intent(this, LoginActivity.class).putExtra("recoveryEmail", flow.email).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP));
+            // The confirmation must survive this Activity: the login screen shows it as a banner.
+            // CLEAR_TASK guarantees a fresh LoginActivity even if an old instance was reused.
+            startActivity(new Intent(this, LoginActivity.class)
+                    .putExtra("recoveryEmail", flow.email)
+                    .putExtra("recoveryMessage", flow.status == null || flow.status.trim().isEmpty() ? SUCCESS_MESSAGE : flow.status)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
             finish(); return;
         }
         findViewById(R.id.recoveryEmailPanel).setVisibility(flow.step == 0 ? View.VISIBLE : View.GONE);
@@ -170,9 +177,9 @@ public final class PasswordRecoveryActivity extends AppCompatActivity {
                             try { seconds = Integer.parseInt(response.headers().get("Retry-After")); } catch (Exception ignored) { }
                             retryUntil = SystemClock.elapsedRealtime() + Math.max(1, Math.min(seconds, 3600)) * 1000L;
                         }
-                    } else if (body == null || (action == 0 && (body.requestId == null || body.requestId.isEmpty()))
-                            || (action == 1 && (body.authorization == null || !body.authorization.matches("[a-f0-9]{64}")))
-                            || (action == 2 && (body.message == null || body.message.trim().isEmpty()))) {
+                    } else if (action == 0 && (body == null || body.requestId == null || body.requestId.isEmpty())) {
+                        status = "Resposta incompleta do servidor. Solicite outro código.";
+                    } else if (action == 1 && (body == null || body.authorization == null || !body.authorization.matches("[a-f0-9]{64}"))) {
                         status = "Resposta incompleta do servidor. Solicite outro código.";
                     } else {
                         step = action + 1;
@@ -185,7 +192,9 @@ public final class PasswordRecoveryActivity extends AppCompatActivity {
                             status = "Código verificado. Você tem 5 minutos para salvar uma senha com pelo menos 8 caracteres, uma letra e um número.";
                         } else {
                             authorization = null;
-                            status = "Se houver uma conta elegível, a senha foi atualizada. Entre novamente.";
+                            // Any 2xx means the server accepted the reset, even if the body/message is empty.
+                            status = body != null && body.message != null && !body.message.trim().isEmpty()
+                                    ? body.message.trim() : SUCCESS_MESSAGE;
                         }
                     }
                     notifyChanged();

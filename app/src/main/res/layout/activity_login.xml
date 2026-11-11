@@ -34,6 +34,19 @@
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/loginRecoveryMessage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bg_recovery_success_16"
+            android:gravity="center"
+            android:padding="16dp"
+            android:textColor="#102D2B"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:includeFontPadding="false"

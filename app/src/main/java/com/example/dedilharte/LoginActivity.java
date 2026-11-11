@@ -55,17 +55,17 @@ public final class LoginActivity extends AppCompatActivity {
         api = DedilharteApiClient.service();
         setContentView(R.layout.activity_login);
         com.example.dedilharte.view.WindowInsetsHelper.activity(this);
-        findViewById(R.id.loginForgotPassword).setOnClickListener(v -> startActivity(
-                new Intent(this, PasswordRecoveryActivity.class).putExtra("email", emailInput.getText().toString())));
 
         emailInput = findViewById(R.id.loginEmail);
-        String recoveredEmail = getIntent().getStringExtra("recoveryEmail");
-        if (recoveredEmail != null) emailInput.setText(recoveredEmail);
         passwordInput = findViewById(R.id.loginPassword);
         loginButton = findViewById(R.id.loginButton);
         progressBar = findViewById(R.id.loginProgress);
         createAccount = findViewById(R.id.loginCreateAccount);
         showPassword = findViewById(R.id.loginShowPassword);
+
+        findViewById(R.id.loginForgotPassword).setOnClickListener(v -> startActivity(
+                new Intent(this, PasswordRecoveryActivity.class).putExtra("email", emailInput.getText().toString())));
+        applyRecoveryIntent(getIntent());
 
         showPassword.setOnCheckedChangeListener((buttonView, isChecked) -> {
             int selection = passwordInput.getSelectionStart();
@@ -81,6 +81,32 @@ public final class LoginActivity extends AppCompatActivity {
             validateSavedSession();
         } else {
             setLoading(false);
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        applyRecoveryIntent(intent);
+    }
+
+    /**
+     * Shows the recovery outcome on the login screen so the confirmation is not lost
+     * when the recovery Activity finishes, and pre-fills the e-mail that was reset.
+     */
+    private void applyRecoveryIntent(Intent intent) {
+        if (intent == null) return;
+        String recoveredEmail = intent.getStringExtra("recoveryEmail");
+        if (recoveredEmail != null && !recoveredEmail.trim().isEmpty()) {
+            emailInput.setText(recoveredEmail);
+            passwordInput.setText("");
+        }
+        String recoveryMessage = intent.getStringExtra("recoveryMessage");
+        if (recoveryMessage != null && !recoveryMessage.trim().isEmpty()) {
+            TextView banner = findViewById(R.id.loginRecoveryMessage);
+            banner.setText(recoveryMessage.trim());
+            banner.setVisibility(View.VISIBLE);
         }
     }
 

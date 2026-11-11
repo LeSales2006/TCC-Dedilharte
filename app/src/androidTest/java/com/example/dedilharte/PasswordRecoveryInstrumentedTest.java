@@ -128,10 +128,15 @@ public class PasswordRecoveryInstrumentedTest extends MainActivityEncodingInstru
                 onView(withId(R.id.recoverySubmit)).perform(scrollTo(), click());
                 onView(withId(R.id.recoveryStep)).check(matches(withText(containsString("3 de 3"))));
                 status = 200;
+                // Second pass exercises the original bug: a 2xx reset with no response body.
+                empty = night;
                 onView(withId(R.id.recoverySubmit)).perform(scrollTo(), click());
                 assertEquals(before + 2, resets); assertNull(last.code); assertEquals(GRANT, last.authorization);
                 assertEquals(last.newPassword, last.confirmPassword);
                 onView(withId(R.id.loginEmail)).check(matches(withText("test@example.com")));
+                onView(withId(R.id.loginRecoveryMessage))
+                        .check(matches(isDisplayed()))
+                        .check(matches(withText(containsString("Senha"))));
                 assertFalse(new SessionManager(context).isLoggedIn());
             }
         }
