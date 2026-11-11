@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <style name="PasswordField" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:background">@drawable/bg_profile_field</item>
+        <item name="boxBackgroundMode">none</item>
+        <item name="hintEnabled">false</item>
+        <item name="endIconMode">password_toggle</item>
+        <item name="endIconTint">@color/theme_ink</item>
+        <item name="endIconDrawable">@drawable/ic_password_toggle</item>
+    </style>
     <style name="ProfileLabel">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>

@@ -3,8 +3,6 @@ package com.example.dedilharte.view;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
-import android.graphics.drawable.GradientDrawable;
-import android.graphics.drawable.LayerDrawable;
 import android.util.TypedValue;
 import android.widget.TextView;
 import android.text.SpannableString;
@@ -14,7 +12,7 @@ import androidx.appcompat.content.res.AppCompatResources;
 import androidx.core.graphics.ColorUtils;
 import com.example.dedilharte.R;
 
-/** Local Material Symbols Outlined: 24dp bounds, with 20dp glyphs on contrast badges. */
+/** Local Material Symbols Outlined with transparent backgrounds and surface-aware tint. */
 public final class MaterialIcons {
     public static final int DARK = Color.rgb(27, 79, 76);
     private MaterialIcons() {}
@@ -28,21 +26,9 @@ public final class MaterialIcons {
     }
 
     public static Drawable onSurface(Context context, int resource, int surface) {
-        boolean brand = surface == DARK || surface == Color.rgb(50, 150, 145)
-                || surface == Color.rgb(84, 214, 221);
-        int tint = brand || ColorUtils.calculateLuminance(surface) < .18 ? Color.WHITE : DARK;
-        Drawable icon = drawable(context, resource, tint);
-        if (ColorUtils.calculateContrast(tint, surface) >= 3) return icon;
-        GradientDrawable badge = new GradientDrawable();
-        badge.setColor(DARK); badge.setCornerRadius(dp(context, 6));
-        icon.setTint(Color.WHITE);
-        LayerDrawable layers = new LayerDrawable(new Drawable[]{badge, icon});
-        int inset = dp(context, 2);
-        layers.setLayerInset(1, inset, inset, inset, inset);
-        layers.setLayerSize(1, dp(context, 20), dp(context, 20));
-        layers.setLayerGravity(1, android.view.Gravity.CENTER);
-        layers.setBounds(0, 0, dp(context, 24), dp(context, 24));
-        return layers;
+        int tint = ColorUtils.calculateContrast(Color.WHITE, surface)
+                > ColorUtils.calculateContrast(DARK, surface) ? Color.WHITE : DARK;
+        return drawable(context, resource, tint);
     }
 
     public static void leading(TextView view, int resource, int surface) {

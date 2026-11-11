@@ -2,7 +2,6 @@ package com.example.dedilharte.view;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.text.InputType;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -20,10 +19,12 @@ import retrofit2.Response;
 public final class PasswordDialogs {
     private PasswordDialogs() {}
     private static EditText input(Activity activity, LinearLayout form, String hint) {
-        EditText field = new EditText(activity); field.setHint(hint); field.setContentDescription(hint);
-        field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        field.setSingleLine(true); field.setTextColor(activity.getColor(R.color.theme_page_text));
-        field.setHintTextColor(activity.getColor(R.color.theme_page_text)); form.addView(field); return field;
+        android.view.View container = activity.getLayoutInflater().inflate(R.layout.password_field, form, false);
+        EditText field = container.findViewById(R.id.passwordField);
+        field.setHint(hint); field.setContentDescription(hint);
+        LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) container.getLayoutParams();
+        params.bottomMargin = Math.round(12 * activity.getResources().getDisplayMetrics().density);
+        form.addView(container, params); return field;
     }
     public static void change(Activity activity, DedilharteApiService api, Runnable changed) {
         String token = new com.example.dedilharte.auth.SessionManager(activity).getToken();

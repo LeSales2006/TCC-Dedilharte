@@ -81,12 +81,12 @@
             android:textSize="15sp"
             android:textStyle="bold" />
 
-        <EditText
+        <com.google.android.material.textfield.TextInputLayout android:id="@+id/loginPasswordContainer" style="@style/PasswordField" android:layout_width="match_parent" android:layout_height="wrap_content" app:endIconMode="password_toggle" android:layout_marginTop="8dp">
+            <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/loginPassword"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/bg_profile_field"
+            android:background="@null"
             android:hint="Sua senha"
             android:inputType="textPassword"
             android:paddingLeft="16dp"
@@ -95,9 +95,10 @@
             android:textColor="@color/theme_header"
             android:textColorHint="@color/theme_hint"
             android:textSize="17sp" />
+        </com.google.android.material.textfield.TextInputLayout>
 
         <CheckBox
-            android:id="@+id/loginShowPassword"
+            android:id="@+id/loginShowPassword" android:visibility="gone"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:buttonTint="#FFFFFF"

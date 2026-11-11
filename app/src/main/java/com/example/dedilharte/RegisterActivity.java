@@ -196,7 +196,7 @@ public final class RegisterActivity extends AppCompatActivity {
 
     private void showStep(boolean personalize) {
         personalizing = personalize;
-        for (View view : new View[]{nameInput, emailInput, passwordInput, confirmPasswordInput, showPassword}) view.setVisibility(personalize ? View.GONE : View.VISIBLE);
+        for (View view : new View[]{nameInput, emailInput, findViewById(R.id.registerPasswordContainer), findViewById(R.id.registerConfirmPasswordContainer)}) view.setVisibility(personalize ? View.GONE : View.VISIBLE);
         findViewById(R.id.registerPreferences).setVisibility(personalize ? View.VISIBLE : View.GONE);
         registerButton.setText(personalize ? "CRIAR CONTA" : "CONTINUAR");
         loginLink.setText(personalize ? "Voltar aos dados" : "Entrar");

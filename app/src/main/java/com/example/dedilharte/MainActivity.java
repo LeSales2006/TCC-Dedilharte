@@ -3517,11 +3517,13 @@ public class MainActivity extends AppCompatActivity {
         content.setPadding(dp(24), dp(24), dp(24), dp(32));
         EditText name = input("", "Nome");
         EditText email = input("", "E-mail");
-        EditText password = input("", "Senha temporária");
+        View passwordContainer = getLayoutInflater().inflate(R.layout.password_field, content, false);
+        EditText password = passwordContainer.findViewById(R.id.passwordField);
+        password.setHint("Senha temporária");
         Spinner role = simpleSpinner(new String[]{ROLE_STUDENT, ROLE_ADMIN, ROLE_CONFIGURATOR});
         content.addView(name, matchWrap(0, 10));
         content.addView(email, matchWrap(0, 10));
-        content.addView(password, matchWrap(0, 10));
+        content.addView(passwordContainer, matchWrap(0, 10));
         content.addView(role, matchWrap(0, 12));
         TextView save = button("CRIAR", DARK, WHITE, 56, R.drawable.ic_ms_add);
         save.setOnClickListener(v -> DedilharteApiClient.service().createManagedUser(new ManagedUserRequest(
